@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#8B3A1E;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#A64D2A;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <circle cx="100" cy="100" r="98" fill="url(#grad)" stroke="#F2DEB3" stroke-width="4"/>
+  <circle cx="100" cy="100" r="88" fill="none" stroke="#F2DEB3" stroke-width="1.5" opacity="0.6"/>
+  <text x="100" y="88" font-family="'Playfair Display', Georgia, serif" font-size="48" font-weight="700" fill="#F2DEB3" text-anchor="middle" dominant-baseline="middle">EVZA</text>
+  <text x="100" y="118" font-family="'Lato', Arial, sans-serif" font-size="12" fill="#F2DEB3" text-anchor="middle" dominant-baseline="middle" opacity="0.8">Gallery</text>
+  <line x1="55" y1="130" x2="145" y2="130" stroke="#F2DEB3" stroke-width="0.8" opacity="0.5"/>
+  <text x="100" y="145" font-family="'Lato', Arial, sans-serif" font-size="7" fill="#F2DEB3" text-anchor="middle" dominant-baseline="middle" opacity="0.7" letter-spacing="1.5">TETE &mdash; MO&Ccedil;AMBIQUE</text>
+</svg>

@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="pt-MZ">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EVZA Gallery — Escola Primária e Secundária Vale do Zambeze</title>
+  <meta name="description" content="Galeria de fotos e vídeos da Escola Vale do Zambeze (EVZA) — Tete, Moçambique. Momentos que ficam para sempre." />
+  <meta name="theme-color" content="#8B3A1E" />
+
+  <!-- Open Graph (WhatsApp, Facebook, etc.) -->
+  <meta property="og:title" content="EVZA Gallery — Escola Vale do Zambeze" />
+  <meta property="og:description" content="Galeria de fotos e vídeos da EVZA — Tete, Moçambique. Momentos que ficam para sempre." />
+  <meta property="og:type" content="website" />
+  <meta property="og:image" content="assets/logo.jpg" />
+
+  <link rel="icon" type="image/svg+xml" href="assets/logo.jpg" />
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,300;0,400;0,700;1,400&family=Playfair+Display:ital,wght@0,700;1,700&display=swap" />
+
+  <link rel="stylesheet" href="style.css" />
+  <link rel="manifest" href="manifest.json" />
+</head>
+<body>
+
+  <!-- NAVBAR -->
+  <nav class="navbar" id="navbar">
+    <div class="container navbar-inner">
+      <a href="index.html" class="navbar-brand">
+        <img src="assets/logo.jpg" alt="EVZA Logo" />
+        EVZA Gallery
+      </a>
+      <button class="navbar-menu-btn" id="nav-menu-btn" aria-label="Menu">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <line x1="3" y1="6" x2="21" y2="6"/>
+          <line x1="3" y1="12" x2="21" y2="12"/>
+          <line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
+      </button>
+      <ul class="navbar-links" id="nav-links">
+        <li><a href="index.html">Início</a></li>
+        <li><a href="admin.html">Administrador</a></li>
+      </ul>
+    </div>
+  </nav>
+
+  <main>
+    <!-- HERO -->
+    <section class="hero">
+      <div class="hero-bg"></div>
+      <div class="hero-content">
+        <img class="hero-logo" src="assets/logo.jpg" alt="EVZA Logo" />
+        <h1>EVZA Gallery</h1>
+        <p>Momentos que Ficam para Sempre</p>
+        <p class="hero-location">Escola Vale do Zambeze &mdash; Tete, Moçambique</p>
+      </div>
+    </section>
+
+    <!-- CATALOG GRID -->
+    <section class="container">
+      <div class="section-header">
+        <h2>Catálogos</h2>
+        <p>Explore as memórias registadas ao longo do ano — fotos e vídeos dos alunos e professores.</p>
+        <span class="divider"></span>
+      </div>
+      <div class="catalogs-grid" id="catalogs-grid"></div>
+    </section>
+  </main>
+
+  <!-- LIGHTBOX -->
+  <div class="lightbox" id="lightbox" aria-hidden="true">
+    <div class="lightbox-content" id="lightbox-content">
+      <button class="lightbox-close" id="lightbox-close" aria-label="Fechar">&times;</button>
+      <button class="lightbox-nav lightbox-prev" id="lightbox-prev" aria-label="Anterior">&#8249;</button>
+      <button class="lightbox-nav lightbox-next" id="lightbox-next" aria-label="Próximo">&#8250;</button>
+      <span class="lightbox-caption" id="lightbox-caption"></span>
+      <span class="lightbox-counter" id="lightbox-counter"></span>
+    </div>
+  </div>
+
+  <!-- FOOTER -->
+  <footer class="footer">
+    <div class="container footer-inner">
+      <img src="assets/logo.jpg" alt="EVZA Logo" />
+      <h3>Escola Primária e Secundária Vale do Zambeze</h3>
+      <p>Tete — Moçambique</p>
+      <p class="footer-copy">&copy; <span id="footer-year"></span> EVZA Gallery</p>
+    </div>
+  </footer>
+  <script>document.getElementById('footer-year').textContent = new Date().getFullYear();</script>
+
+  <!-- SCRIPTS -->
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+  <script src="download-share.js"></script>
+  <script>
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", function () {
+        navigator.serviceWorker.register("sw.js").catch(function () {});
+      });
+    }
+  </script>
+</body>
+</html>
