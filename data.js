@@ -183,6 +183,17 @@ const GALLERY_DATA = [
     "name": "02 de abril: Dia Mundial da Conscientização do Autismo",
     "description": "O Dia Mundial da Conscientização do Autismo, 2 de abril, foi criado pela Organização das Nações Unidas (ONU), no ano de 2007. Essa data foi escolhida com o objetivo de levar informação à população para reduzir a discriminação e o preconceito contra os indivíduos que apresentam o Transtorno do Espectro Autista (TEA). O autismo é uma condição de saúde caracterizada por desafios em habilidades sociais, comportamentos repetitivos, fala e comunicação não-verbal; entretanto, terapias adequadas a cada caso podem auxiliar essas pessoas a melhorar sua relação com o mundo.",
     "cover": "1lDZ0ticuXfklxnKA1o0gAAuaHX1o9Vt4",
-    "items": []
+    "items": [
+      {
+        "type": "photo",
+        "src": "1Y4pnOCy8Jx9NbItZcq2w5nYwU1fR7tJv",
+        "caption": "Dia Mundial da Conscientização do Autismo — EVZA"
+      },
+      {
+        "type": "photo",
+        "src": "1VuyKJS0n_ZTzHYdhQ8sKuzOls_MRHONy",
+        "caption": "Atividades de conscientização e inclusão — EVZA"
+      }
+    ]
   }
 ];
