@@ -4,7 +4,7 @@
  */
 
 function driveLink(id) {
-  return 'https://drive.google.com/uc?export=view&id=' + id;
+  return "https://lh3.googleusercontent.com/d/" + id + "=w1200";
 }
 
 function driveDownload(id) {

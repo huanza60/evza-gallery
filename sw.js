@@ -3,7 +3,7 @@
  * Caches static assets for offline viewing
  * Checks for new content every 30 minutes
  */
-var CACHE_NAME = "evza-gallery-v3";
+var CACHE_NAME = "evza-gallery-v4";
 var CHECK_INTERVAL = 30 * 60 * 1000;
 var lastKnownVersion = null;
 

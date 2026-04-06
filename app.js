@@ -21,9 +21,22 @@
     return "";
   }
 
-  function directImageURL(id) {
+  function directImageURL(id, imgEl) {
     if (!id) return "";
-    return "https://drive.google.com/uc?export=view&id=" + encodeURIComponent(id);
+    /* Use Google Drive thumbnail endpoint — more reliable than uc?export=view */
+    var thumbUrl =
+      "https://lh3.googleusercontent.com/d/" +
+      encodeURIComponent(id) +
+      "=w1200";
+    if (imgEl) {
+      imgEl.onerror = function () {
+        this.onerror = null;
+        this.src =
+          "https://drive.google.com/uc?export=view&id=" +
+          encodeURIComponent(id);
+      };
+    }
+    return thumbUrl;
   }
 
   function directVideoURL(id) {
@@ -189,7 +202,7 @@
 
     if (item.type === "photo" && item.src) {
       var img = document.createElement("img");
-      img.src = directImageURL(item.src);
+      img.src = directImageURL(item.src, img);
       img.alt = item.caption || "";
       img.loading = "lazy";
       img.onload = function () {
@@ -224,7 +237,7 @@
 
       if (item.poster) {
         var posterImg = document.createElement("img");
-        posterImg.src = directImageURL(item.poster);
+        posterImg.src = directImageURL(item.poster, posterImg);
         posterImg.alt = item.caption || "";
         posterImg.loading = "lazy";
         posterImg.style.cssText = "position:absolute;inset:0;width:100%;height:100%;object-fit:cover;";
@@ -343,7 +356,7 @@
       content.insertBefore(skel, content.firstChild);
     } else if (item.type === "photo") {
       var img = document.createElement("img");
-      img.src = directImageURL(item.src);
+      img.src = directImageURL(item.src, img);
       img.className = "lightbox-image";
       img.alt = item.caption || "";
       content.insertBefore(img, content.firstChild);
@@ -734,7 +747,7 @@
         new Date().toISOString().split("T")[0] +
         "\n */\n\n" +
         "function driveLink(id) {\n" +
-        "  return 'https://drive.google.com/uc?export=view&id=' + id;\n" +
+        "  return 'https://lh3.googleusercontent.com/d/' + id + '=w1200';\n" +
         "}\n\n" +
         "function driveDownload(id) {\n" +
         "  return 'https://drive.google.com/uc?export=download&id=' + id;\n" +
