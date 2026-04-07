@@ -103,8 +103,23 @@
     var admin = loadAdminData();
     var ids = {};
     for (var i = 0; i < base.length; i++) ids[base[i].id] = true;
+
     for (var j = 0; j < admin.length; j++) {
-      if (!ids[admin[j].id]) base.push(admin[j]);
+      var found = false;
+      for (var k = 0; k < base.length; k++) {
+        if (base[k].id === admin[j].id) {
+          /* Merge items from admin into existing catalog */
+          var adminItems = admin[j].items || [];
+          for (var m = 0; m < adminItems.length; m++) {
+            base[k].items.push(adminItems[m]);
+          }
+          found = true;
+          break;
+        }
+      }
+      if (!found) {
+        base.push(admin[j]);
+      }
     }
     return base;
   }
@@ -703,23 +718,48 @@
         item.poster = extractDriveId(posterRaw) || "";
       }
 
-      var data = loadAdminData();
-      for (var i = 0; i < data.length; i++) {
-        if (data[i].id === catId) {
-          data[i].items.push(item);
-          localStorage.setItem("evza_admin_data", JSON.stringify(data));
-          msg.style.display = "block";
-          msg.textContent = caption
-            ? "Item adicionado: '" + caption + "'"
-            : "Item adicionado ao catálogo!";
-          form.reset();
-          document.getElementById("poster-group").style.display = "none";
-          return;
+      /* Check if catalog already exists in admin data */
+      var adminData = loadAdminData();
+      var found = false;
+      for (var i = 0; i < adminData.length; i++) {
+        if (adminData[i].id === catId) {
+          adminData[i].items.push(item);
+          found = true;
+          break;
         }
       }
 
-      err.style.display = "block";
-      err.textContent = "Catálogo não encontrado.";
+      /* If catalog doesn't exist in admin yet, create it with this item */
+      if (!found) {
+        var allMerged = getMergedData();
+        for (var j = 0; j < allMerged.length; j++) {
+          if (allMerged[j].id === catId) {
+            var adminEntry = {
+              id: allMerged[j].id,
+              name: allMerged[j].name,
+              description: allMerged[j].description,
+              cover: allMerged[j].cover,
+              items: [item]
+            };
+            adminData.push(adminEntry);
+            found = true;
+            break;
+          }
+        }
+      }
+
+      if (found) {
+        localStorage.setItem("evza_admin_data", JSON.stringify(adminData));
+        msg.style.display = "block";
+        msg.textContent = caption
+          ? "Item adicionado: '" + caption + "'"
+          : "Item adicionado ao catálogo!";
+        form.reset();
+        document.getElementById("poster-group").style.display = "none";
+      } else {
+        err.style.display = "block";
+        err.textContent = "Catálogo não encontrado.";
+      }
     });
   }
 
