@@ -101,20 +101,34 @@
   function getMergedData() {
     var base = typeof GALLERY_DATA !== "undefined" ? JSON.parse(JSON.stringify(GALLERY_DATA)) : [];
     var admin = loadAdminData();
-    var ids = {};
-    for (var i = 0; i < base.length; i++) ids[base[i].id] = true;
 
     for (var j = 0; j < admin.length; j++) {
       var found = false;
       for (var k = 0; k < base.length; k++) {
         if (base[k].id === admin[j].id) {
-          /* Use admin items as authoritative (already contains merged data from syncAdminData) */
-          base[k].items = admin[j].items || [];
+          // Replace base items with admin items (authoritative)
+          var adminItems = admin[j].items || [];
+          // Avoid duplicating items that already exist in base
+          var existingKeys = {};
+          for (var e = 0; e < adminItems.length; e++) {
+            if (adminItems[e].src && adminItems[e].src !== "") {
+              existingKeys[adminItems[e].src] = true;
+            }
+          }
+          // Add missing items from base
+          var baseItems = base[k].items || [];
+          for (var b = 0; b < baseItems.length; b++) {
+            if (baseItems[b].src && baseItems[b].src !== "" && !existingKeys[baseItems[b].src]) {
+              adminItems.push(baseItems[b]);
+            }
+          }
+          base[k].items = adminItems;
           found = true;
           break;
         }
       }
       if (!found) {
+        // Catalog only exists in admin - add to base
         base.push(admin[j]);
       }
     }
@@ -1047,13 +1061,12 @@
   }
 
   function renderCatalogList(listEl) {
-    syncAdminData();
-    var data = loadAdminData();
+    var data = getMergedData();
     listEl.innerHTML = "";
 
     if (data.length === 0) {
       listEl.innerHTML =
-        '<p style="color:var(--text-secondary);font-size:0.9rem;padding:1rem 0;">Nenhum catálogo disponvel.</p>';
+        '<p style="color:var(--text-secondary);font-size:0.9rem;padding:1rem 0;">Nenhum catálogo disponível.</p>';
       return;
     }
 
