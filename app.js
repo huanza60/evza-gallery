@@ -814,6 +814,176 @@
     renderCatalogList(list);
   }
 
+  /* ---- Edit media modal ---- */
+  function openEditMediaModal(catalogId, itemIdx) {
+    /* Find the catalog from admin data */
+    var adminData = loadAdminData();
+    var catalog = null;
+    for (var c = 0; c < adminData.length; c++) {
+      if (adminData[c].id === catalogId) {
+        catalog = adminData[c];
+        break;
+      }
+    }
+    if (!catalog) return;
+
+    var item = catalog.items[itemIdx];
+    if (!item) return;
+
+    /* Build edit modal */
+    var overlay = document.getElementById("edit-media-overlay");
+    if (!overlay) {
+      overlay = document.createElement("div");
+      overlay.id = "edit-media-overlay";
+      overlay.style.cssText = "display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9000;align-items:center;justify-content:center;";
+      document.body.appendChild(overlay);
+
+      var modal = document.createElement("div");
+      modal.id = "edit-media-modal";
+      modal.style.cssText = "background:#fff;border-radius:12px;padding:1.5rem;width:90%;max-width:500px;max-height:85vh;overflow-y:auto;color:#222;";
+
+      var title = document.createElement("h3");
+      title.id = "edit-media-title";
+      title.style.cssText = "margin:0 0 1rem;font-size:1.1rem;";
+      modal.appendChild(title);
+
+      /* Type */
+      var typeLabel = document.createElement("label");
+      typeLabel.style.cssText = "display:block;font-size:0.85rem;margin-bottom:0.25rem;font-weight:bold;color:#555;";
+      typeLabel.textContent = "Tipo";
+      modal.appendChild(typeLabel);
+      var typeDisplay = document.createElement("input");
+      typeDisplay.id = "edit-item-type";
+      typeDisplay.readOnly = true;
+      typeDisplay.style.cssText = "width:100%;padding:0.5rem;border:1px solid #ccc;border-radius:6px;margin-bottom:1rem;background:#f0f0f0;";
+      modal.appendChild(typeDisplay);
+
+      /* Link */
+      var linkLabel = document.createElement("label");
+      linkLabel.style.cssText = "display:block;font-size:0.85rem;margin-bottom:0.25rem;font-weight:bold;color:#555;";
+      linkLabel.textContent = "Link do ficheiro (Google Drive)";
+      modal.appendChild(linkLabel);
+      var linkInput = document.createElement("input");
+      linkInput.id = "edit-item-link";
+      linkInput.type = "text";
+      linkInput.style.cssText = "width:100%;padding:0.5rem;border:1px solid #ccc;border-radius:6px;margin-bottom:1rem;";
+      modal.appendChild(linkInput);
+
+      /* Poster (hidden for photos) */
+      var posterLabel = document.createElement("label");
+      posterLabel.id = "edit-poster-label";
+      posterLabel.style.cssText = "display:none;font-size:0.85rem;margin-bottom:0.25rem;font-weight:bold;color:#555;";
+      posterLabel.textContent = "Poster do vídeo (opcional)";
+      modal.appendChild(posterLabel);
+      var posterInput = document.createElement("input");
+      posterInput.id = "edit-item-poster";
+      posterInput.type = "text";
+      posterInput.style.cssText = "display:none;width:100%;padding:0.5rem;border:1px solid #ccc;border-radius:6px;margin-bottom:1rem;";
+      modal.appendChild(posterInput);
+
+      /* Caption */
+      var captionLabel = document.createElement("label");
+      captionLabel.style.cssText = "display:block;font-size:0.85rem;margin-bottom:0.25rem;font-weight:bold;color:#555;";
+      captionLabel.textContent = "Legenda";
+      modal.appendChild(captionLabel);
+      var captionInput = document.createElement("input");
+      captionInput.id = "edit-item-caption";
+      captionInput.type = "text";
+      captionInput.style.cssText = "width:100%;padding:0.5rem;border:1px solid #ccc;border-radius:6px;margin-bottom:1.2rem;";
+      modal.appendChild(captionInput);
+
+      /* Buttons */
+      var btnRow = document.createElement("div");
+      btnRow.style.cssText = "display:flex;gap:0.5rem;justify-content:flex-end;";
+
+      var cancelBtn = document.createElement("button");
+      cancelBtn.textContent = "Cancelar";
+      cancelBtn.style.cssText = "padding:0.5rem 1.2rem;border:1px solid #ccc;border-radius:6px;background:#f5f5f5;cursor:pointer;";
+      cancelBtn.addEventListener("click", function () { closeEditModal(overlay); });
+      btnRow.appendChild(cancelBtn);
+
+      var saveBtn = document.createElement("button");
+      saveBtn.textContent = "Guardar";
+      saveBtn.style.cssText = "padding:0.5rem 1.2rem;border:none;border-radius:6px;color:#fff;cursor:pointer;font-weight:bold;";
+      btnRow.appendChild(saveBtn);
+
+      modal.appendChild(btnRow);
+      overlay.appendChild(modal);
+
+      overlay.addEventListener("click", function (e) {
+        if (e.target === overlay) closeEditModal(overlay);
+      });
+    }
+
+    /* Fill values */
+    document.getElementById("edit-media-title").textContent = "Editar ficheiro — " + catalog.name;
+    document.getElementById("edit-item-type").value = item.type === "video" ? "Vídeo" : "Fotografia";
+    document.getElementById("edit-item-link").value = "https://drive.google.com/file/d/" + item.src + "/view";
+    document.getElementById("edit-item-caption").value = item.caption || "";
+
+    var posterLabelEl = document.getElementById("edit-poster-label");
+    var posterInputEl = document.getElementById("edit-item-poster");
+    if (item.type === "video") {
+      posterLabelEl.style.display = "block";
+      posterInputEl.style.display = "block";
+      posterInputEl.value = item.poster ? "https://drive.google.com/file/d/" + item.poster + "/view" : "";
+    } else {
+      posterLabelEl.style.display = "none";
+      posterInputEl.style.display = "none";
+      posterInputEl.value = "";
+    }
+
+    overlay.style.display = "flex";
+
+    /* Save logic */
+    var saveBtnHandler = function () {
+      var rawLink = document.getElementById("edit-item-link").value.trim();
+      var newSrc = extractDriveId(rawLink);
+      if (!newSrc) {
+        alert("Link não reconhecido.");
+        return;
+      }
+
+      var newCaption = document.getElementById("edit-item-caption").value.trim();
+      var newPoster = "";
+      if (item.type === "video") {
+        var rawPoster = document.getElementById("edit-item-poster").value.trim();
+        newPoster = extractDriveId(rawPoster) || "";
+      }
+
+      /* Update in admin data */
+      var data = loadAdminData();
+      for (var i = 0; i < data.length; i++) {
+        if (data[i].id === catalogId) {
+          data[i].items[itemIdx].src = newSrc;
+          data[i].items[itemIdx].caption = newCaption;
+          if (item.type === "video") {
+            data[i].items[itemIdx].poster = newPoster;
+          }
+          break;
+        }
+      }
+      localStorage.setItem("evza_admin_data", JSON.stringify(data));
+
+      closeEditModal(overlay);
+
+      /* Refresh the list */
+      var catalogListEl = document.getElementById("catalog-list");
+      if (catalogListEl) renderCatalogList(catalogListEl);
+      populateCatalogSelect();
+    };
+
+    document.querySelector("#edit-media-modal button:last-child").removeEventListener("click", saveBtnHandler);
+    var newSaveBtn = document.querySelector("#edit-media-modal button:last-child");
+    newSaveBtn.textContent = "Guardar";
+    newSaveBtn.style.background = "#2a7ae4";
+    newSaveBtn.onclick = saveBtnHandler;
+  }
+
+  function closeEditModal(overlay) {
+    if (overlay) overlay.style.display = "none";
+  }
+
   function renderCatalogList(listEl) {
     var data = loadAdminData();
     listEl.innerHTML = "";
@@ -876,9 +1046,22 @@
               var iconText = item.type === "video" ? "🎬" : "📷";
               itemInfo.innerHTML = '<span>' + iconText + ' ' + (item.caption || "Sem legenda") + '</span>';
 
+              var btnGroup = document.createElement("div");
+              btnGroup.style.cssText = "display:flex;gap:0.4rem;align-items:center;flex-shrink:0;";
+
+              /* Edit button */
+              var editBtn = document.createElement("button");
+              editBtn.textContent = "Editar";
+              editBtn.style.cssText = "padding:0.25rem 0.6rem;border:1px solid #2a7ae4;background:#2a7ae4;color:#fff;font-size:0.75rem;border-radius:4px;cursor:pointer;font-weight:bold;";
+              editBtn.title = "Editar ficheiro";
+              editBtn.addEventListener("click", function () {
+                openEditMediaModal(catalog.id, itemIdx);
+              });
+
+              /* Delete button */
               var itemDelBtn = document.createElement("button");
               itemDelBtn.textContent = "×";
-              itemDelBtn.style.cssText = "width:28px;height:28px;border:none;background:#cc3333;color:#fff;font-size:1.1rem;border-radius:50%;cursor:pointer;flex-shrink:0;";
+              itemDelBtn.style.cssText = "width:28px;height:28px;border:none;background:#cc3333;color:#fff;font-size:1.1rem;border-radius:50%;cursor:pointer;";
               itemDelBtn.title = "Eliminar ficheiro";
               itemDelBtn.addEventListener("click", function () {
                 if (confirm("Eliminar este ficheiro" + (item.caption ? ": \"" + item.caption + "\"" : "") + "?")) {
@@ -895,8 +1078,10 @@
                 }
               });
 
+              btnGroup.appendChild(editBtn);
+              btnGroup.appendChild(itemDelBtn);
               itemRow.appendChild(itemInfo);
-              itemRow.appendChild(itemDelBtn);
+              itemRow.appendChild(btnGroup);
               itemsList.appendChild(itemRow);
             })(items[j], j);
           }
