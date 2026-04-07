@@ -827,11 +827,13 @@
     for (var i = 0; i < data.length; i++) {
       (function (catalog, idx) {
         var counts = itemCounts(catalog);
-        var row = document.createElement("div");
-        row.className = "admin-card-header-row";
-        row.style.cssText = "display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;padding:0.75rem 0;border-bottom:1px solid var(--offwhite-dark);";
+        var section = document.createElement("div");
+        section.style.cssText = "padding:0.75rem 0;border-bottom:1px solid var(--offwhite-dark);";
 
-        row.innerHTML =
+        /* Catalog header */
+        var header = document.createElement("div");
+        header.style.cssText = "display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;";
+        header.innerHTML =
           '<div>' +
           '<strong>' + catalog.name + '</strong>' +
           '<span style="font-size:0.82rem;color:var(--text-secondary);margin-left:0.5rem;">' +
@@ -840,8 +842,9 @@
 
         var delBtn = document.createElement("button");
         delBtn.className = "btn btn-sm btn-primary";
-        delBtn.textContent = "Eliminar";
+        delBtn.textContent = "Eliminar catálogo";
         delBtn.style.background = "#cc3333";
+        delBtn.style.cursor = "pointer";
         delBtn.addEventListener("click", function () {
           if (confirm("Tem certeza que deseja eliminar o catálogo \"" + catalog.name + "\"?")) {
             var adminData = loadAdminData();
@@ -852,8 +855,55 @@
           }
         });
 
-        row.appendChild(delBtn);
-        listEl.appendChild(row);
+        header.appendChild(delBtn);
+        section.appendChild(header);
+
+        /* Media items list */
+        var itemsList = document.createElement("div");
+        itemsList.style.cssText = "margin-top:0.5rem;padding-left:0.5rem;";
+
+        var items = catalog.items || [];
+        if (items.length === 0) {
+          itemsList.innerHTML = '<p style="font-size:0.82rem;color:var(--text-secondary);">Nenhum ficheiro adicionado.</p>';
+        } else {
+          for (var j = 0; j < items.length; j++) {
+            (function (item, itemIdx) {
+              var itemRow = document.createElement("div");
+              itemRow.style.cssText = "display:flex;align-items:center;justify-content:space-between;padding:0.4rem 0;border-top:1px solid #eee;font-size:0.85rem;";
+
+              var itemInfo = document.createElement("div");
+              itemInfo.style.cssText = "flex:1;overflow:hidden;";
+              var iconText = item.type === "video" ? "🎬" : "📷";
+              itemInfo.innerHTML = '<span>' + iconText + ' ' + (item.caption || "Sem legenda") + '</span>';
+
+              var itemDelBtn = document.createElement("button");
+              itemDelBtn.textContent = "×";
+              itemDelBtn.style.cssText = "width:28px;height:28px;border:none;background:#cc3333;color:#fff;font-size:1.1rem;border-radius:50%;cursor:pointer;flex-shrink:0;";
+              itemDelBtn.title = "Eliminar ficheiro";
+              itemDelBtn.addEventListener("click", function () {
+                if (confirm("Eliminar este ficheiro" + (item.caption ? ": \"" + item.caption + "\"" : "") + "?")) {
+                  var adminData = loadAdminData();
+                  for (var c = 0; c < adminData.length; c++) {
+                    if (adminData[c].id === catalog.id) {
+                      adminData[c].items.splice(itemIdx, 1);
+                      break;
+                    }
+                  }
+                  localStorage.setItem("evza_admin_data", JSON.stringify(adminData));
+                  renderCatalogList(listEl);
+                  populateCatalogSelect();
+                }
+              });
+
+              itemRow.appendChild(itemInfo);
+              itemRow.appendChild(itemDelBtn);
+              itemsList.appendChild(itemRow);
+            })(items[j], j);
+          }
+        }
+
+        section.appendChild(itemsList);
+        listEl.appendChild(section);
       })(data[i], i);
     }
   }
