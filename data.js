@@ -1,10 +1,10 @@
 /**
  * EVZA Gallery — Data Configuration
- * Exported from Admin Panel — 2026-04-04
+ * Exported from Admin Panel — 2026-04-07
  */
 
 function driveLink(id) {
-  return "https://lh3.googleusercontent.com/d/" + id + "=w1200";
+  return 'https://lh3.googleusercontent.com/d/' + id + '=w1200';
 }
 
 function driveDownload(id) {
