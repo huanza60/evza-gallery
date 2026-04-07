@@ -809,6 +809,8 @@
   }
 
   function initManageTab() {
+    // Sync admin data so all catalogs from data.js are in localStorage
+    syncAdminData();
     var list = document.getElementById("catalog-list");
     if (!list) return;
     renderCatalogList(list);
@@ -816,6 +818,9 @@
 
   /* ---- Edit media modal ---- */
   function openEditMediaModal(catalogId, itemIdx) {
+    // Ensure admin data is synced
+    syncAdminData();
+
     /* Find the catalog from admin data */
     var adminData = loadAdminData();
     var catalog = null;
@@ -984,13 +989,74 @@
     if (overlay) overlay.style.display = "none";
   }
 
+  /* Sync admin data with data.js: if a catalog from data.js has items with src, merge them
+     into admin copy so edits/deletions work on the full set */
+  function syncAdminData() {
+    var adminData = loadAdminData();
+    var galleryData = typeof GALLERY_DATA !== "undefined" ? GALLERY_DATA : [];
+
+    for (var gi = 0; gi < galleryData.length; gi++) {
+      var gCatalog = galleryData[gi];
+      var adminIdx = -1;
+      for (var ai = 0; ai < adminData.length; ai++) {
+        if (adminData[ai].id === gCatalog.id) {
+          adminIdx = ai;
+          break;
+        }
+      }
+
+      /* Check if original data.js catalog has items not in admin copy */
+      if (adminIdx >= 0) {
+        /* Merge missing items from data.js */
+        var adminItemKeys = {};
+        for (var ai2 = 0; ai2 < adminData[adminIdx].items.length; ai2++) {
+          var item = adminData[adminIdx].items[ai2];
+          if (item.src && item.src !== "") {
+            adminItemKeys[item.type + "|" + item.src] = true;
+          }
+        }
+        /* Only add items that actually exist in admin data (from user adding via admin) */
+        var newItems = [];
+        for (var di = 0; di < gCatalog.items.length; di++) {
+          var key = gCatalog.items[di].type + "|" + gCatalog.items[di].src;
+          if (!adminItemKeys[key] && gCatalog.items[di].src && gCatalog.items[di].src !== "") {
+            newItems.push(gCatalog.items[di]);
+          }
+        }
+        for (var add = 0; add < newItems.length; add++) {
+          adminData[adminIdx].items.push(newItems[add]);
+        }
+      } else {
+        /* Not in admin at all — create entry from data.js */
+        var adminEntry = {
+          id: gCatalog.id,
+          name: gCatalog.name,
+          description: gCatalog.description,
+          cover: gCatalog.cover,
+          items: []
+        };
+        /* Only create entry if catalog has items */
+        for (var di2 = 0; di2 < gCatalog.items.length; di2++) {
+          if (gCatalog.items[di2].src && gCatalog.items[di2].src !== "") {
+            adminEntry.items.push(gCatalog.items[di2]);
+          }
+        }
+        adminData.push(adminEntry);
+      }
+    }
+
+    localStorage.setItem("evza_admin_data", JSON.stringify(adminData));
+    return adminData;
+  }
+
   function renderCatalogList(listEl) {
+    syncAdminData();
     var data = loadAdminData();
     listEl.innerHTML = "";
 
     if (data.length === 0) {
       listEl.innerHTML =
-        '<p style="color:var(--text-secondary);font-size:0.9rem;padding:1rem 0;">Nenhum catálogo adicionado via Admin Panel.</p>';
+        '<p style="color:var(--text-secondary);font-size:0.9rem;padding:1rem 0;">Nenhum catálogo disponvel.</p>';
       return;
     }
 
@@ -1010,13 +1076,13 @@
           counts.total + " ficheiros</span>" +
           "</div>";
 
-        var delBtn = document.createElement("button");
-        delBtn.className = "btn btn-sm btn-primary";
-        delBtn.textContent = "Eliminar catálogo";
-        delBtn.style.background = "#cc3333";
-        delBtn.style.cursor = "pointer";
-        delBtn.addEventListener("click", function () {
-          if (confirm("Tem certeza que deseja eliminar o catálogo \"" + catalog.name + "\"?")) {
+        var delCatBtn = document.createElement("button");
+        delCatBtn.className = "btn btn-sm btn-primary";
+        delCatBtn.textContent = "Eliminar catlogo";
+        delCatBtn.style.background = "#cc3333";
+        delCatBtn.style.cursor = "pointer";
+        delCatBtn.addEventListener("click", function () {
+          if (confirm("Tem certeza que deseja eliminar o catlogo \u00ab" + catalog.name + "\u00bb?")) {
             var adminData = loadAdminData();
             adminData.splice(idx, 1);
             localStorage.setItem("evza_admin_data", JSON.stringify(adminData));
@@ -1024,8 +1090,7 @@
             populateCatalogSelect();
           }
         });
-
-        header.appendChild(delBtn);
+        header.appendChild(delCatBtn);
         section.appendChild(header);
 
         /* Media items list */
@@ -1043,7 +1108,7 @@
 
               var itemInfo = document.createElement("div");
               itemInfo.style.cssText = "flex:1;overflow:hidden;";
-              var iconText = item.type === "video" ? "🎬" : "📷";
+              var iconText = item.type === "video" ? "\uD83C\uDFAC" : "\uD83D\uDCF7";
               itemInfo.innerHTML = '<span>' + iconText + ' ' + (item.caption || "Sem legenda") + '</span>';
 
               var btnGroup = document.createElement("div");
@@ -1060,19 +1125,19 @@
 
               /* Delete button */
               var itemDelBtn = document.createElement("button");
-              itemDelBtn.textContent = "×";
+              itemDelBtn.textContent = "\u00D7";
               itemDelBtn.style.cssText = "width:28px;height:28px;border:none;background:#cc3333;color:#fff;font-size:1.1rem;border-radius:50%;cursor:pointer;";
               itemDelBtn.title = "Eliminar ficheiro";
               itemDelBtn.addEventListener("click", function () {
-                if (confirm("Eliminar este ficheiro" + (item.caption ? ": \"" + item.caption + "\"" : "") + "?")) {
-                  var adminData = loadAdminData();
-                  for (var c = 0; c < adminData.length; c++) {
-                    if (adminData[c].id === catalog.id) {
-                      adminData[c].items.splice(itemIdx, 1);
+                if (confirm("Eliminar este ficheiro" + (item.caption ? ": \u00ab" + item.caption + "\u00bb" : "") + "?")) {
+                  var a = loadAdminData();
+                  for (var c = 0; c < a.length; c++) {
+                    if (a[c].id === catalog.id) {
+                      a[c].items.splice(itemIdx, 1);
                       break;
                     }
                   }
-                  localStorage.setItem("evza_admin_data", JSON.stringify(adminData));
+                  localStorage.setItem("evza_admin_data", JSON.stringify(a));
                   renderCatalogList(listEl);
                   populateCatalogSelect();
                 }
