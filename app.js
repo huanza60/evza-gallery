@@ -21,13 +21,14 @@
     return "";
   }
 
-  function directImageURL(id, imgEl) {
+  function directImageURL(id, imgEl, size) {
     if (!id) return "";
+    size = size || "w1200";
     /* Use Google Drive thumbnail endpoint — more reliable than uc?export=view */
     var thumbUrl =
       "https://lh3.googleusercontent.com/d/" +
       encodeURIComponent(id) +
-      "=w1200";
+      "=" + size;
     if (imgEl) {
       imgEl.onerror = function () {
         this.onerror = null;
@@ -57,6 +58,7 @@
       videos = 0;
     var items = catalog.items || [];
     for (var i = 0; i < items.length; i++) {
+      if (!items[i].src || items[i].src === "") continue;
       if (items[i].type === "photo") photos++;
       else if (items[i].type === "video") videos++;
     }
@@ -147,7 +149,7 @@
     card.href = "catalog.html?catalog=" + encodeURIComponent(catalog.id);
     card.className = "catalog-card";
 
-    var coverSrc = catalog.cover ? directImageURL(catalog.cover) : "";
+    var coverSrc = catalog.cover ? directImageURL(catalog.cover, null, "w500") : "";
     var coverTag = "";
     if (coverSrc) {
       coverTag =
@@ -202,7 +204,7 @@
 
     if (item.type === "photo" && item.src) {
       var img = document.createElement("img");
-      img.src = directImageURL(item.src, img);
+      img.src = directImageURL(item.src, img, "w500");
       img.alt = item.caption || "";
       img.loading = "lazy";
       img.onload = function () {
@@ -237,7 +239,7 @@
 
       if (item.poster) {
         var posterImg = document.createElement("img");
-        posterImg.src = directImageURL(item.poster, posterImg);
+        posterImg.src = directImageURL(item.poster, posterImg, "w500");
         posterImg.alt = item.caption || "";
         posterImg.loading = "lazy";
         posterImg.style.cssText = "position:absolute;inset:0;width:100%;height:100%;object-fit:cover;";
