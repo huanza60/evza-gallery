@@ -108,11 +108,8 @@
       var found = false;
       for (var k = 0; k < base.length; k++) {
         if (base[k].id === admin[j].id) {
-          /* Merge items from admin into existing catalog */
-          var adminItems = admin[j].items || [];
-          for (var m = 0; m < adminItems.length; m++) {
-            base[k].items.push(adminItems[m]);
-          }
+          /* Use admin items as authoritative (already contains merged data from syncAdminData) */
+          base[k].items = admin[j].items || [];
           found = true;
           break;
         }
