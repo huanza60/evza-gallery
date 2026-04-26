@@ -1,219 +1,51 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="pt-MZ">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Administrador — EVZA Gallery</title>
-  <meta name="description" content="Painel de administração — EVZA Gallery" />
-  <meta name="theme-color" content="#8B3A1E" />
-  <meta name="robots" content="noindex, nofollow" />
-  <link rel="icon" type="image/svg+xml" href="assets/logo.jpg" />
-
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,300;0,400;0,700;1,400&family=Playfair+Display:ital,wght@0,700;1,700&display=swap" />
-
-  <link rel="stylesheet" href="style.css" />
-  <link rel="manifest" href="manifest.json" />
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Área do Administrador — EVZA Gallery</title>
+  <meta name="robots" content="noindex">
+  <link rel="manifest" href="manifest.json"><link rel="icon" href="assets/logo.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700;900&family=Playfair+Display:wght@700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
 </head>
-<body>
-
-  <!-- NAVBAR -->
-  <nav class="navbar" id="navbar">
-    <div class="container navbar-inner">
-      <a href="index.html" class="navbar-brand">
-        <img src="assets/logo.jpg" alt="EVZA Logo" />
-        EVZA Gallery
-      </a>
-      <button class="navbar-menu-btn" id="nav-menu-btn" aria-label="Menu">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-          <line x1="3" y1="6" x2="21" y2="6"/>
-          <line x1="3" y1="12" x2="21" y2="12"/>
-          <line x1="3" y1="18" x2="21" y2="18"/>
-        </svg>
-      </button>
-      <ul class="navbar-links" id="nav-links">
-        <li><a href="index.html">Início</a></li>
-        <li><a href="admin.html">Administrador</a></li>
-      </ul>
-    </div>
-  </nav>
-
-  <main>
-    <!-- LOGIN FORM -->
-    <div class="admin-login" id="admin-login">
-      <div class="admin-login-box">
-        <div class="lock-icon">
-          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-            <path d="M7 11V7a5 5 0 0110 0v4"/>
-          </svg>
-        </div>
-        <h2>Área Restrita</h2>
-        <p>Introduza a palavra-passe de administrador para continuar.</p>
-        <form id="login-form">
-          <div class="form-group">
-            <label for="admin-password">Palavra-passe</label>
-            <input type="password" id="admin-password" autocomplete="off" required placeholder="Introduza a palavra-passe" />
-          </div>
-          <div class="admin-error" id="login-error"></div>
-          <button type="submit" class="btn btn-primary btn-block">Entrar</button>
-        </form>
+<body class="page" data-page="admin">
+  <main id="admin-root">
+    <section class="login-view">
+      <div class="login-card">
+        <img src="assets/logo.svg" alt="EVZA">
+        <h1>Área do Administrador</h1>
+        <p>A carregar painel...</p>
       </div>
-    </div>
-
-    <!-- ADMIN DASHBOARD -->
-    <div id="admin-dashboard" style="display: none;">
-      <div class="container admin-dashboard">
-
-        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem;margin-bottom:1.5rem;">
-          <h1 style="font-size:clamp(1.5rem, 4vw, 2.5rem);">Painel do Administrador</h1>
-          <button class="btn btn-sm btn-primary" id="logout-btn" style="background: #cc3333;">Sair</button>
-        </div>
-
-        <!-- Tabs -->
-        <div class="admin-tabs">
-          <button class="admin-tab active" data-tab="tab-add-catalog">Adicionar Catálogo</button>
-          <button class="admin-tab" data-tab="tab-add-media">Adicionar Mídia</button>
-          <button class="admin-tab" data-tab="tab-manage">Gerir Catálogos</button>
-          <button class="admin-tab" data-tab="tab-export">Exportar Dados</button>
-        </div>
-
-        <!-- Tab: Add Catalog -->
-        <section class="admin-panel-section active" id="tab-add-catalog">
-          <div class="admin-card">
-            <h3>Novo Catálogo</h3>
-            <form id="add-catalog-form">
-              <div class="form-group">
-                <label for="catalog-name">Nome do Catálogo</label>
-                <input type="text" id="catalog-name" required placeholder="Ex: Formatura 2024" />
-              </div>
-              <div class="form-group">
-                <label for="catalog-description">Descrição</label>
-                <input type="text" id="catalog-description" placeholder="Breve descrição do evento ou atividade" />
-              </div>
-              <div class="form-group">
-                <label for="catalog-cover">Foto de Capa</label>
-                <input type="text" id="catalog-cover" placeholder="Cole o link do Google Drive para a foto de capa" />
-              </div>
-
-              <div class="help-box" style="margin-bottom:1.5rem;">
-                <h4>Como obter um link direto do Google Drive</h4>
-                <ol>
-                  <li>Faça o upload da foto no Google Drive</li>
-                  <li>Clique direito no ficheiro → <strong>Partilhar</strong> → <strong>Partilhar</strong></li>
-                  <li>Mude para <strong>"Qualquer pessoa com o link"</strong></li>
-                  <li>Clique em <strong>"Copiar link"</strong></li>
-                  <li>Cole o link completo aqui — o sistema extrairá automaticamente</li>
-                </ol>
-                <p style="margin-top:0.5rem;font-size:0.78rem;color:var(--text-secondary);">
-                  Formato esperado: <code>https://drive.google.com/file/d/SEU_ID_AQUI/view?usp=sharing</code>
-                </p>
-              </div>
-
-              <div class="admin-error" id="add-catalog-error"></div>
-              <div class="admin-success" id="add-catalog-msg"></div>
-              <button type="submit" class="btn btn-primary">Adicionar Catálogo</button>
-            </form>
-          </div>
-        </section>
-
-        <!-- Tab: Add Media -->
-        <section class="admin-panel-section" id="tab-add-media">
-          <div class="admin-card">
-            <h3>Adicionar Foto ou Vídeo</h3>
-            <form id="add-media-form">
-              <div class="form-group">
-                <label for="media-catalog">Catálogo de destino</label>
-                <select id="media-catalog" required>
-                  <option value="">Selecione um catálogo…</option>
-                </select>
-              </div>
-              <div class="form-group">
-                <label for="media-type">Tipo</label>
-                <select id="media-type" required>
-                  <option value="photo">Foto</option>
-                  <option value="video">Vídeo</option>
-                </select>
-              </div>
-              <div class="form-group">
-                <label for="media-file">Link do Ficheiro</label>
-                <input type="text" id="media-file" required placeholder="Cole o link do Google Drive para a foto ou vídeo" />
-              </div>
-              <div class="form-group" style="display:none;" id="poster-group">
-                <label for="media-poster">Poster do Vídeo</label>
-                <input type="text" id="media-poster" placeholder="Link do Google Drive para a imagem de capa do vídeo (opcional)" />
-              </div>
-              <div class="form-group">
-                <label for="media-caption">Legenda</label>
-                <input type="text" id="media-caption" placeholder="Descrição da foto ou vídeo" />
-              </div>
-
-              <div class="help-box" style="margin-bottom:1.5rem;">
-                <h4>Dicas para adicionar mídia</h4>
-                <ol>
-                  <li>Faça o upload da foto do Google Drive</li>
-                  <li>Selecione o catálogo de destino</li>
-                  <li>Cole o link do ficheiro de imagem ou vídeo</li>
-                  <li>Adicione uma legenda descritiva para melhor organização dos ficheiros e vídeos</li>
-                </ol>
-              </div>
-
-              <div class="admin-error" id="add-media-error"></div>
-              <div class="admin-success" id="add-media-msg"></div>
-              <button type="submit" class="btn btn-green">Adicionar Mídia</button>
-            </form>
-          </div>
-        </section>
-
-        <!-- Tab: Manage -->
-        <section class="admin-panel-section" id="tab-manage">
-          <div class="admin-card">
-            <h3>Catálogos Existentes</h3>
-            <p style="color:var(--text-secondary);font-size:0.88rem;margin-bottom:1rem;">
-              Lista dos catálogos adicionados via painel de administração. Os catálogos definidos no ficheiro <code>data.js</code> são permanentes e não aparecem aqui.
-            </p>
-            <div id="catalog-list"></div>
-          </div>
-        </section>
-
-        <!-- Tab: Export -->
-        <section class="admin-panel-section" id="tab-export">
-          <div class="admin-card">
-            <h3>Exportar Dados</h3>
-            <p style="color:var(--text-secondary);font-size:0.88rem;margin-bottom:1rem;">
-              Exporte todo o conteúdo da galeria como um ficheiro <code>data.js</code> — que pode ser carregado no repositório do GitHub para tornar as alterações permanentes.
-            </p>
-            <div class="help-box" style="margin-bottom:1.5rem;">
-              <h4>Como tornar os dados permanentes?</h4>
-              <ol>
-                <li>Clique em "Exportar Dados" — será baixado o ficheiro <code>data.js</code></li>
-                <li>No seu computador, substitua o ficheiro <code>data.js</code> atual pelo ficheiro exportado</li>
-                <li>Faça o push para o repositório GitHub — o site será atualizado automaticamente pelo GitHub Pages</li>
-              </ol>
-            </div>
-            <button class="btn btn-green" id="export-btn">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-              Exportar Dados
-            </button>
-          </div>
-        </section>
-
-      </div>
-    </div>
+    </section>
   </main>
-
-  <!-- FOOTER -->
-  <footer class="footer">
-    <div class="container footer-inner">
-      <img src="assets/logo.jpg" alt="EVZA Logo" />
-      <h3>Escola Primária e Secundária Vale do Zambeze</h3>
-      <p>Tete — Moçambique</p>
-      <p class="footer-copy">&copy; <span class="footer-year"></span> EVZA Gallery</p>
-    </div>
-  </footer>
-
-  <script src="data.js"></script>
-  <script src="app.js"></script>
+  <script>
+    window.addEventListener('DOMContentLoaded', function () {
+      setTimeout(function () {
+        var root = document.getElementById('admin-root');
+        if (!root || !root.textContent.includes('A carregar painel')) return;
+        root.innerHTML = '<section class="login-view"><form class="login-card stack" id="login-form-fallback"><img src="assets/logo.svg" alt="EVZA"><h1>Área do Administrador</h1><input class="field" name="email" type="email" placeholder="Email" required><input class="field" name="password" type="password" placeholder="Palavra-passe" required><button class="btn" type="submit">Entrar</button><p class="meta" id="login-error-fallback">Configure o Supabase em config.js para activar o painel.</p></form></section>';
+        var form = document.getElementById('login-form-fallback');
+        form.addEventListener('submit', async function (event) {
+          event.preventDefault();
+          var cfg = window.EVZA || {};
+          var error = document.getElementById('login-error-fallback');
+          if (!cfg.supabaseUrl || !cfg.supabaseAnonKey || !window.supabase) {
+            error.textContent = 'Configure o Supabase em config.js e abra o site com internet.';
+            return;
+          }
+          var client = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey);
+          var data = new FormData(form);
+          var result = await client.auth.signInWithPassword({ email: data.get('email'), password: data.get('password') });
+          if (result.error) {
+            error.textContent = result.error.message;
+            return;
+          }
+          location.reload();
+        });
+      }, 900);
+    });
+  </script>
+  <script src="config.js"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script type="module" src="app.js"></script>
 </body>
 </html>

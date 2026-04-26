@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="pt-MZ">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pesquisar — EVZA Gallery</title>
+  <meta name="description" content="Pesquisar fotos, catálogos e eventos da EVZA Gallery.">
+  <meta property="og:title" content="Pesquisar — EVZA Gallery"><meta property="og:image" content="assets/logo.svg"><meta property="og:type" content="website">
+  <link rel="manifest" href="manifest.json"><link rel="icon" href="assets/logo.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700;900&family=Playfair+Display:wght@700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="page" data-page="search">
+  <header class="site-header"><div class="wrap header-inner"><a class="brand" href="index.html"><img src="assets/logo.svg" alt="EVZA"><span>EVZA Gallery</span></a><nav class="nav"><a href="index.html">Galeria</a><a href="search.html">Pesquisar</a><button class="icon-btn" data-dark-toggle>☾</button><a href="admin.html">Admin</a></nav></div></header>
+  <main>
+    <section class="catalog-hero"><div class="wrap"><h1>Pesquisar</h1><label class="search-box">⌕ <input id="search-input" placeholder="Pesquisar fotos, catálogos, eventos..."></label><div class="filters"><select id="type-filter"><option>Tudo</option><option>Fotos</option><option>Vídeos</option></select><select id="year-filter"><option>Todos os anos</option></select><button class="filter" id="clear-search">× Limpar</button></div></div></section>
+    <section class="section"><div class="wrap" id="search-results"></div></section>
+  </main>
+  <script src="config.js"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script type="module" src="app.js"></script>
+</body>
+</html>

@@ -1,108 +1,47 @@
-/**
- * EVZA Gallery — Service Worker
- * Caches static assets for offline viewing
- * Checks for new content every 30 minutes
- */
-var CACHE_NAME = "evza-gallery-v6";
-var CHECK_INTERVAL = 30 * 60 * 1000;
-var lastKnownVersion = null;
-
-var ASSETS = [
-  "./",
-  "./index.html",
-  "./catalog.html",
-  "./admin.html",
-  "./style.css",
-  "./app.js",
-  "./data.js",
-  "./manifest.json",
-  "./assets/logo.jpg",
-  "./download-share.js",
-  "./version.json"
+const CACHE = 'evza-v23';
+const SHELL = [
+  './', './index.html', './catalog.html', './search.html', './admin.html',
+  './photo.html', './offline.html', './style.css', './app.js', './supabase.js',
+  './auth.js', './config.js', './manifest.json', './assets/logo.svg',
+  './assets/placeholder.svg'
 ];
 
-self.addEventListener("install", function (e) {
-  e.waitUntil(
-    caches.open(CACHE_NAME).then(function (cache) {
-      return cache.addAll(ASSETS).catch(function () {});
-    })
-  );
+self.addEventListener('install', (event) => {
+  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)));
   self.skipWaiting();
 });
 
-self.addEventListener("activate", function (e) {
-  e.waitUntil(
-    caches.keys().then(function (names) {
-      return Promise.all(
-        names.filter(function (n) {
-          return n !== CACHE_NAME;
-        }).map(function (n) {
-          return caches.delete(n);
-        })
-      );
-    }).then(function () {
-      /* Start polling after activation */
-      checkVersion();
-      setInterval(checkVersion, CHECK_INTERVAL);
-    })
-  );
+self.addEventListener('activate', (event) => {
+  event.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))));
   self.clients.claim();
 });
 
-self.addEventListener("fetch", function (e) {
-  if (e.request.url.startsWith("https://fonts.googleapis.com") ||
-      e.request.url.startsWith("https://fonts.gstatic.com")) return;
-  if (e.request.url.startsWith("https://drive.google.com")) return;
-
-  e.respondWith(
-    caches.match(e.request).then(function (cached) {
-      if (cached) return cached;
-      return fetch(e.request).then(function (response) {
-        if (!response || response.status !== 200) return response;
-        var clone = response.clone();
-        caches.open(CACHE_NAME).then(function (cache) {
-          cache.put(e.request, clone);
-        });
-        return response;
-      });
-    })
+self.addEventListener('fetch', (event) => {
+  const url = new URL(event.request.url);
+  if (url.hostname.includes('supabase.co') || event.request.method !== 'GET') return;
+  const isAsset = /\.(css|js|svg|png|jpg|jpeg|webp|gif|woff2?)$/i.test(url.pathname);
+  event.respondWith(
+    (isAsset ? cacheFirst(event.request) : networkFirst(event.request))
+      .catch(() => caches.match('./offline.html'))
   );
 });
 
-/* ===================================================================
-   Version checker — polls version.json and notifies clients
-   =================================================================== */
-
-function checkVersion() {
-  var baseUrl = self.registration.scope || "./";
-  fetch(baseUrl + "version.json", {
-    cache: "no-cache",
-    mode: "cors"
-  })
-    .then(function (res) {
-      if (!res.ok) return null;
-      return res.json();
-    })
-    .then(function (data) {
-      if (!data || !data.version) return;
-      if (lastKnownVersion && lastKnownVersion !== data.version) {
-        notifyClients(data);
-      }
-      lastKnownVersion = data.version;
-    })
-    .catch(function () {});
+async function cacheFirst(request) {
+  const cached = await caches.match(request);
+  if (cached) return cached;
+  const response = await fetch(request);
+  const cache = await caches.open(CACHE);
+  cache.put(request, response.clone());
+  return response;
 }
 
-function notifyClients(data) {
-  self.clients.matchAll({ includeUncontrolled: true, type: "window" }).then(function (clients) {
-    for (var i = 0; i < clients.length; i++) {
-      clients[i].postMessage({
-        type: "new_version",
-        version: data.version,
-        date: data.date || "",
-        message: data.message || "",
-        newCatalogs: data.newCatalogs || []
-      });
-    }
-  });
+async function networkFirst(request) {
+  const cache = await caches.open(CACHE);
+  try {
+    const response = await fetch(request);
+    cache.put(request, response.clone());
+    return response;
+  } catch (error) {
+    return (await caches.match(request)) || Promise.reject(error);
+  }
 }

@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="pt-MZ">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sem ligação — EVZA Gallery</title>
+  <link rel="icon" href="assets/logo.svg"><link rel="stylesheet" href="style.css">
+</head>
+<body class="page" data-page="offline">
+  <main class="login-view">
+    <section class="login-card">
+      <img src="assets/logo.svg" alt="EVZA">
+      <h1>Sem ligação</h1>
+      <svg width="86" height="86" viewBox="0 0 24 24" fill="none" stroke="#F2DEB3" stroke-width="1.8" aria-hidden="true"><path d="M2 8.8a16 16 0 0 1 20 0"/><path d="M5 12.2a11 11 0 0 1 14 0"/><path d="M8.5 15.5a6 6 0 0 1 7 0"/><path d="M12 19h.01"/><path d="M3 3l18 18"/></svg>
+      <p>Sem ligação à internet. A galeria será apresentada quando a ligação for restaurada.</p>
+      <h3>Catálogos em cache</h3>
+      <ul id="cached-list"><li>A carregar...</li></ul>
+      <button class="btn" id="retry">Tentar novamente</button>
+    </section>
+  </main>
+  <script src="config.js"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script type="module" src="app.js"></script>
+</body>
+</html>

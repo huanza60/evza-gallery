@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 600" role="img" aria-labelledby="title">
+  <title id="title">Imagem EVZA indisponível</title>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#F2DEB3"/>
+      <stop offset=".58" stop-color="#FAF6EF"/>
+      <stop offset="1" stop-color="#C25A2A"/>
+    </linearGradient>
+  </defs>
+  <rect width="900" height="600" fill="url(#bg)"/>
+  <circle cx="450" cy="250" r="72" fill="#8B3A1E" opacity=".18"/>
+  <path d="M331 380c57-44 97-45 151-1 43 34 76 33 127-2v45c-54 35-91 37-134 3-50-40-89-40-144 0z" fill="#2D6A4F" opacity=".55"/>
+  <text x="450" y="315" text-anchor="middle" font-family="Georgia,serif" font-size="48" fill="#8B3A1E" font-weight="700">EVZA</text>
+  <text x="450" y="354" text-anchor="middle" font-family="Arial,sans-serif" font-size="20" fill="#6B5744">Foto não disponível</text>
+</svg>

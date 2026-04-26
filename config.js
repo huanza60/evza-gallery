@@ -1,0 +1,21 @@
+window.EVZA = {
+  supabaseUrl: 'https://oegloqxdgtfamumcardw.supabase.co',
+  supabaseAnonKey: 'sb_publishable_2tXdUJBLchc1PAOj5Z6MtA_fisLIVF0',
+  schoolName: 'Escola Primária e Secundária Vale do Zambeze',
+  shortName: 'EVZA Gallery',
+  location: 'Tete, Moçambique',
+  tagline: 'Momentos que Ficam para Sempre',
+  contactEmail: 'evzambeze@gmail.com',
+  bucket: 'evza-media',
+  itemsPerPage: 24,
+  slideshowDelay: 5000,
+  enableRealtime: true,
+  enableLikes: true,
+  enableComments: true,
+  enableDownload: true,
+  enableDarkMode: true,
+  enableViewCount: true,
+  requireApproval: false,
+  siteUrl: location.origin + location.pathname.replace(/\/[^/]*$/, ''),
+  defaultOgImage: 'assets/logo.svg'
+};

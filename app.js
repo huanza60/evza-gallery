@@ -1,1284 +1,1072 @@
-/**
- * EVZA Gallery — Main Application Logic
- * Escola Primária e Secundária Vale do Zambeze
- */
-(function () {
-  "use strict";
+import { supabase, isConfigured, resolveUrl, resolvePoster, extractDriveId, storageUrl } from './supabase.js';
+import { signIn, signOut, getSession, getUser, onAuthChange } from './auth.js';
 
-  /* ===================================================================
-     HELPERS
-     =================================================================== */
+const cfg = window.EVZA;
+const $ = (sel, root = document) => root.querySelector(sel);
+const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
+const state = { catalogs: [], media: [], lightboxIndex: 0, slideshow: null, currentCatalog: null };
 
-  function extractDriveId(url) {
-    if (!url) return "";
-    var m;
-    m = url.match(/\/d\/([^/]+)/);
-    if (m && m[1]) return m[1];
-    m = url.match(/[?&]id=([^&]+)/);
-    if (m && m[1]) return m[1];
-    m = url.match(/[-\w]{10,}/);
-    if (m) return m[0];
-    return "";
+document.addEventListener('DOMContentLoaded', init);
+
+function init() {
+  initCursor();
+  initDarkMode();
+  initHeader();
+  initQuickSearch();
+  registerServiceWorker();
+  if (!isConfigured) toast('Configure o Supabase em config.js para activar dados reais.');
+  const page = document.body.dataset.page;
+  if (page === 'home') loadHome();
+  if (page === 'catalog') loadCatalogPage();
+  if (page === 'search') initSearchPage();
+  if (page === 'photo') initPhotoPage();
+  if (page === 'admin') initAdmin();
+  if (page === 'offline') initOffline();
+}
+
+function initCursor() {
+  const cur = document.createElement('div');
+  cur.className = 'cursor';
+  document.body.appendChild(cur);
+  window.addEventListener('mousemove', (e) => {
+    cur.style.left = `${e.clientX}px`;
+    cur.style.top = `${e.clientY}px`;
+  });
+  document.addEventListener('mouseover', (e) => cur.classList.toggle('hot', Boolean(e.target.closest('a,button,input,textarea,select,.card'))));
+}
+
+export function initDarkMode() {
+  if (!cfg.enableDarkMode) return;
+  const saved = localStorage.getItem('evza-theme');
+  const theme = saved || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  document.documentElement.dataset.theme = theme;
+  $$('[data-dark-toggle]').forEach((b) => b.textContent = theme === 'dark' ? '☀' : '☾');
+  $$('[data-dark-toggle]').forEach((b) => b.addEventListener('click', toggleDarkMode));
+}
+
+export function toggleDarkMode() {
+  const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+  document.documentElement.dataset.theme = next;
+  localStorage.setItem('evza-theme', next);
+  $$('[data-dark-toggle]').forEach((b) => b.textContent = next === 'dark' ? '☀' : '☾');
+}
+
+function initHeader() {
+  const header = $('.site-header');
+  if (!header) return;
+  const onScroll = () => header.classList.toggle('solid', scrollY > 40);
+  addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+  const heroContent = $('.hero-content');
+  if (heroContent) addEventListener('scroll', () => heroContent.style.transform = `translateY(${scrollY * .3}px)`, { passive: true });
+}
+
+function initQuickSearch() {
+  $$('[data-search-go]').forEach((input) => input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && input.value.trim()) location.href = `search.html?q=${encodeURIComponent(input.value.trim())}`;
+  }));
+}
+
+function fmtDate(date) {
+  if (!date) return 'Data por confirmar';
+  return new Date(`${date}T12:00:00`).toLocaleDateString('pt-MZ', { day: 'numeric', month: 'long', year: 'numeric' });
+}
+
+function fmtNum(num = 0) {
+  return Number(num || 0).toLocaleString('pt-MZ');
+}
+
+function escapeHtml(value = '') {
+  return String(value).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+function directDriveUrl(fileId) {
+  return driveThumbUrl(fileId, 2000);
+}
+
+function driveThumbUrl(fileId, size = 1000) {
+  return fileId ? `https://drive.google.com/thumbnail?id=${encodeURIComponent(fileId)}&sz=w${size}` : '';
+}
+
+function drivePreviewUrl(fileId) {
+  return fileId ? `https://drive.google.com/file/d/${encodeURIComponent(fileId)}/preview` : '';
+}
+
+function itemDriveId(item = {}) {
+  return item.drive_file_id || extractDriveId(item.src_url || '') || extractDriveId(item.poster_url || '');
+}
+
+function normalisePublicUrl(url = '') {
+  const value = String(url || '').trim();
+  if (!value) return '';
+  const driveId = extractDriveId(value);
+  return driveId ? directDriveUrl(driveId) : value;
+}
+
+function catalogCover(cat = {}) {
+  return normalisePublicUrl(cat.cover_url) || 'assets/placeholder.svg';
+}
+
+function itemPoster(item = {}) {
+  const poster = resolvePoster(item);
+  const driveId = itemDriveId(item);
+  if (item.type === 'video' && driveId && (!poster || poster.includes('placeholder.svg') || poster.includes('uc?export=view'))) return driveThumbUrl(driveId, 2000);
+  return poster;
+}
+
+function videoTileStyle(item = {}) {
+  const poster = itemPoster(item);
+  return poster && !poster.includes('placeholder.svg') ? ` style="background-image:url('${escapeHtml(poster)}')"` : '';
+}
+
+function toast(message) {
+  let wrap = $('.toast-wrap');
+  if (!wrap) {
+    wrap = document.createElement('div');
+    wrap.className = 'toast-wrap';
+    document.body.appendChild(wrap);
   }
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.textContent = message;
+  wrap.appendChild(el);
+  setTimeout(() => el.remove(), 3600);
+}
 
-  function directImageURL(id, imgEl, size) {
-    if (!id) return "";
-    size = size || "w1200";
-    /* Use Google Drive thumbnail endpoint — more reliable than uc?export=view */
-    var thumbUrl =
-      "https://lh3.googleusercontent.com/d/" +
-      encodeURIComponent(id) +
-      "=" + size;
-    if (imgEl) {
-      imgEl.onerror = function () {
-        this.onerror = null;
-        this.src =
-          "https://drive.google.com/uc?export=view&id=" +
-          encodeURIComponent(id);
-      };
-    }
-    return thumbUrl;
+async function safeQuery(fn, fallback = []) {
+  if (!supabase) return fallback;
+  const { data, error } = await fn();
+  if (error) {
+    console.error(error);
+    toast(error.message);
+    return fallback;
   }
-
-  function directVideoURL(id) {
-    if (!id) return "";
-    return "https://drive.google.com/uc?export=download&id=" + encodeURIComponent(id);
-  }
-
-  function getCatalogById(id) {
-    var all = getMergedData();
-    for (var i = 0; i < all.length; i++) {
-      if (all[i].id === id) return all[i];
-    }
-    return null;
-  }
-
-  function itemCounts(catalog) {
-    var photos = 0,
-      videos = 0;
-    var items = catalog.items || [];
-    for (var i = 0; i < items.length; i++) {
-      if (!items[i].src || items[i].src === "") continue;
-      if (items[i].type === "photo") photos++;
-      else if (items[i].type === "video") videos++;
-    }
-    return { photos: photos, videos: videos, total: photos + videos };
-  }
-
-  function showToast(msg) {
-    var t = document.getElementById("toast");
-    if (!t) {
-      t = document.createElement("div");
-      t.id = "toast";
-      t.className = "toast";
-      t.setAttribute("role", "status");
-      t.setAttribute("aria-live", "polite");
-      document.body.appendChild(t);
-    }
-    t.textContent = msg;
-    t.classList.add("visible");
-    setTimeout(function () {
-      t.classList.remove("visible");
-    }, 2500);
-  }
-
-  /* Expose showToast globally for download-share.js */
-  window.showToast = showToast;
-
-  /* ===================================================================
-     DATA MERGING (data.js + localStorage)
-     =================================================================== */
-
-  function loadAdminData() {
-    try {
-      var raw = localStorage.getItem("evza_admin_data");
-      return raw ? JSON.parse(raw) : [];
-    } catch (e) {
-      return [];
-    }
-  }
-
-  function getMergedData() {
-    var base = typeof GALLERY_DATA !== "undefined" ? JSON.parse(JSON.stringify(GALLERY_DATA)) : [];
-    var admin = loadAdminData();
-
-    for (var j = 0; j < admin.length; j++) {
-      var found = false;
-      for (var k = 0; k < base.length; k++) {
-        if (base[k].id === admin[j].id) {
-          // Replace base items with admin items (authoritative)
-          var adminItems = admin[j].items || [];
-          // Avoid duplicating items that already exist in base
-          var existingKeys = {};
-          for (var e = 0; e < adminItems.length; e++) {
-            if (adminItems[e].src && adminItems[e].src !== "") {
-              existingKeys[adminItems[e].src] = true;
-            }
-          }
-          // Add missing items from base
-          var baseItems = base[k].items || [];
-          for (var b = 0; b < baseItems.length; b++) {
-            if (baseItems[b].src && baseItems[b].src !== "" && !existingKeys[baseItems[b].src]) {
-              adminItems.push(baseItems[b]);
-            }
-          }
-          base[k].items = adminItems;
-          found = true;
-          break;
-        }
-      }
-      if (!found) {
-        // Catalog only exists in admin - add to base
-        base.push(admin[j]);
-      }
-    }
-    return base;
-  }
-
-  /* ===================================================================
-     NAVBAR — mobile toggle & scroll state
-     =================================================================== */
-
-  function initNavbar() {
-    var menuBtn = document.querySelector("#nav-menu-btn");
-    var navLinks = document.querySelector("#nav-links");
-
-    if (menuBtn && navLinks) {
-      menuBtn.addEventListener("click", function () {
-        navLinks.classList.toggle("open");
-      });
-      navLinks.querySelectorAll("a").forEach(function (a) {
-        a.addEventListener("click", function () {
-          navLinks.classList.remove("open");
-        });
-      });
-    }
-
-    var navbar = document.querySelector(".navbar");
-    if (navbar) {
-      var onScroll = function () {
-        if (window.scrollY > 20) navbar.classList.add("scrolled");
-        else navbar.classList.remove("scrolled");
-      };
-      onScroll();
-      window.addEventListener("scroll", onScroll, { passive: true });
-    }
-  }
-
-  /* ===================================================================
-     CATALOG CARD (for index page)
-     =================================================================== */
-
-  function createCatalogCard(catalog) {
-    var counts = itemCounts(catalog);
-    var card = document.createElement("a");
-    card.href = "catalog.html?catalog=" + encodeURIComponent(catalog.id);
-    card.className = "catalog-card";
-
-    var coverSrc = catalog.cover ? directImageURL(catalog.cover, null, "w500") : "";
-    var coverTag = "";
-    if (coverSrc) {
-      coverTag =
-        '<img src="' + coverSrc + '" alt="' + catalog.name + '" loading="lazy" />';
-    } else {
-      coverTag =
-        '<div class="img-placeholder" style="display:flex;align-items:center;justify-content:center;">' +
-        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:48px;height:48px;opacity:0.25;color:#8B3A1E">' +
-        '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/>' +
-        '<polyline points="21 15 16 10 5 21"/></svg></div>';
-    }
-
-    card.innerHTML =
-      '<div class="catalog-card-image">' +
-      coverTag +
-      '<div class="card-overlay"></div>' +
-      '<span class="catalog-card-count">' +
-      counts.total +
-      " ficheiros</span>" +
-      "</div>" +
-      '<div class="catalog-card-body">' +
-      '<h3>' + catalog.name + "</h3>" +
-      '<p>' + (catalog.description || "") + "</p>" +
-      '<div class="catalog-card-actions">' +
-      '<span class="btn-view">Ver Catálogo &rarr;</span>' +
-      '<button class="btn-share" data-catalog-id="' + catalog.id + '" title="Partilhar catálogo">' +
-      '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>' +
-      'Partilhar</button>' +
-      "</div></div>";
-
-    var shareBtn = card.querySelector(".btn-share");
-    shareBtn.addEventListener("click", function (e) {
-      e.preventDefault();
-      e.stopPropagation();
-      if (typeof EVZAShare !== "undefined") {
-        EVZAShare.shareWhatsApp(catalog);
-      }
-    });
-
-    return card;
-  }
-
-  /* ===================================================================
-     MASONRY GRID (for catalog page)
-     =================================================================== */
-
-  function createMasonryItem(item, index) {
-    var wrapper = document.createElement("div");
-    wrapper.className = "masonry-item";
-    wrapper.dataset.index = index;
-    wrapper.dataset.type = item.type;
-
-    if (item.type === "photo" && item.src) {
-      var img = document.createElement("img");
-      img.src = directImageURL(item.src, img, "w500");
-      img.alt = item.caption || "";
-      img.loading = "lazy";
-      img.onload = function () {
-        wrapper.classList.add("loaded");
-      };
-      img.onerror = function () {
-        this.style.display = "none";
-        var ph = document.createElement("div");
-        ph.className = "skeleton";
-        ph.innerHTML =
-          '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;">' +
-          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:32px;height:32px;opacity:0.3;color:#8B3A1E">' +
-          '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/>' +
-          '<polyline points="21 15 16 10 5 21"/></svg></div>';
-        wrapper.appendChild(ph);
-      };
-      var overlay = document.createElement("div");
-      overlay.className = "masonry-overlay";
-      wrapper.appendChild(img);
-      wrapper.appendChild(overlay);
-      if (item.caption) {
-        var caption = document.createElement("div");
-        caption.className = "masonry-caption";
-        caption.textContent = item.caption;
-        wrapper.appendChild(caption);
-      }
-    } else if (item.type === "video" && item.src) {
-      var vidWrapper = document.createElement("div");
-      vidWrapper.style.position = "relative";
-      vidWrapper.style.paddingTop = "56.25%";
-      vidWrapper.style.background = "#1a1a1a";
-
-      if (item.poster) {
-        var posterImg = document.createElement("img");
-        posterImg.src = directImageURL(item.poster, posterImg, "w500");
-        posterImg.alt = item.caption || "";
-        posterImg.loading = "lazy";
-        posterImg.style.cssText = "position:absolute;inset:0;width:100%;height:100%;object-fit:cover;";
-        vidWrapper.appendChild(posterImg);
-        posterImg.onload = function () {
-          wrapper.classList.add("loaded");
-        };
-      } else {
-        var vidPh = document.createElement("div");
-        vidPh.style.cssText = "position:absolute;inset:0;display:flex;align-items:center;justify-content:center;";
-        vidPh.innerHTML =
-          '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:40px;height:40px;opacity:0.3;color:#F2DEB3"><polygon points="5 3 19 12 5 21 5 3"/></svg>';
-        vidWrapper.appendChild(vidPh);
-        setTimeout(function () {
-          wrapper.classList.add("loaded");
-        }, 100);
-      }
-
-      var playIcon = document.createElement("div");
-      playIcon.className = "masonry-video-icon";
-      playIcon.innerHTML =
-        '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>';
-      vidWrapper.appendChild(playIcon);
-      var videoOverlay = document.createElement("div");
-      videoOverlay.className = "masonry-overlay";
-      vidWrapper.appendChild(videoOverlay);
-
-      if (item.caption) {
-        var vidCaption = document.createElement("div");
-        vidCaption.className = "masonry-caption";
-        vidCaption.textContent = item.caption;
-        vidWrapper.appendChild(vidCaption);
-      }
-
-      wrapper.appendChild(vidWrapper);
-    } else {
-      /* No src — skeleton placeholder */
-      var skel = document.createElement("div");
-      skel.className = "skeleton";
-      skel.style.minHeight = "180px";
-      wrapper.appendChild(skel);
-      setTimeout(function () {
-        wrapper.classList.add("loaded");
-      }, 200);
-    }
-
-    return wrapper;
-  }
-
-  /* ===================================================================
-     LIGHTBOX
-     =================================================================== */
-
-  var lightboxState = { items: [], currentIndex: 0, open: false };
-
-  function openLightbox(items, index) {
-    var lb = document.getElementById("lightbox");
-    if (!lb) return;
-    lightboxState.items = items;
-    lightboxState.currentIndex = index;
-    lightboxState.open = true;
-    renderLightbox();
-    lb.classList.add("active");
-    document.body.style.overflow = "hidden";
-    lb.setAttribute("aria-hidden", "false");
-    var main = document.querySelector("main");
-    if (main) main.setAttribute("aria-hidden", "true");
-  }
-
-  function closeLightbox() {
-    lightboxState.open = false;
-    var lb = document.getElementById("lightbox");
-    if (lb) {
-      lb.classList.remove("active");
-      lb.setAttribute("aria-hidden", "true");
-      /* Stop any playing video */
-      var vid = lb.querySelector("video");
-      if (vid) vid.pause();
-    }
-    document.body.style.overflow = "";
-    var main = document.querySelector("main");
-    if (main) main.removeAttribute("aria-hidden");
-  }
-
-  function navigateLightbox(dir) {
-    if (lightboxState.items.length === 0) return;
-    var vid = document.querySelector("#lightbox video");
-    if (vid) vid.pause();
-    lightboxState.currentIndex =
-      (lightboxState.currentIndex + dir + lightboxState.items.length) %
-      lightboxState.items.length;
-    renderLightbox();
-  }
-
-  function renderLightbox() {
-    var lb = document.getElementById("lightbox");
-    if (!lb) return;
-    var idx = lightboxState.currentIndex;
-    var item = lightboxState.items[idx];
-    var content = lb.querySelector("#lightbox-content");
-
-    /* Remove old media */
-    content.querySelectorAll("img, video, .skeleton").forEach(function (el) {
-      el.remove();
-    });
-
-    if (!item || !item.src) {
-      var skel = document.createElement("div");
-      skel.className = "skeleton";
-      skel.style.minHeight = "300px";
-      skel.style.maxWidth = "80vw";
-      skel.style.width = "600px";
-      skel.style.display = "flex";
-      skel.style.alignItems = "center";
-      skel.style.justifyContent = "center";
-      content.insertBefore(skel, content.firstChild);
-    } else if (item.type === "photo") {
-      var img = document.createElement("img");
-      img.src = directImageURL(item.src, img);
-      img.className = "lightbox-image";
-      img.alt = item.caption || "";
-      content.insertBefore(img, content.firstChild);
-    } else if (item.type === "video") {
-      var vid = document.createElement("video");
-      vid.src = directVideoURL(item.src);
-      vid.className = "lightbox-video";
-      vid.controls = true;
-
-      if (item.poster) {
-        vid.poster = directImageURL(item.poster);
-      }
-      content.insertBefore(vid, content.firstChild);
-    }
-
-    var capEl = lb.querySelector("#lightbox-caption");
-    if (capEl) capEl.textContent = item ? item.caption || "" : "";
-
-    var cntEl = lb.querySelector("#lightbox-counter");
-    if (cntEl) cntEl.textContent = (idx + 1) + " / " + lightboxState.items.length;
-  }
-
-  function initLightbox() {
-    var lb = document.getElementById("lightbox");
-    if (!lb) return;
-
-    lb.addEventListener("click", function (e) {
-      if (e.target === lb) closeLightbox();
-    });
-
-    var closeBtn = lb.querySelector("#lightbox-close");
-    if (closeBtn) closeBtn.addEventListener("click", closeLightbox);
-
-    var prevBtn = lb.querySelector("#lightbox-prev");
-    if (prevBtn) prevBtn.addEventListener("click", function () { navigateLightbox(-1); });
-
-    var nextBtn = lb.querySelector("#lightbox-next");
-    if (nextBtn) nextBtn.addEventListener("click", function () { navigateLightbox(1); });
-
-    document.addEventListener("keydown", function (e) {
-      if (!lightboxState.open) return;
-      if (e.key === "Escape") closeLightbox();
-      if (e.key === "ArrowLeft") navigateLightbox(-1);
-      if (e.key === "ArrowRight") navigateLightbox(1);
-    });
-  }
-
-  /* ===================================================================
-     INTERSECTION OBSERVER — fade-in items
-     =================================================================== */
-
-  function initScrollAnimations() {
-    if (!("IntersectionObserver" in window)) {
-      document.querySelectorAll(".masonry-item").forEach(function (item) {
-        item.classList.add("loaded");
-      });
-      return;
-    }
-
-    var observer = new IntersectionObserver(function (entries) {
-      entries.forEach(function (entry) {
-        if (entry.isIntersecting) {
-          entry.target.classList.add("loaded");
-          observer.unobserve(entry.target);
-        }
-      });
-    }, { threshold: 0.1 });
-
-    document.querySelectorAll(".masonry-item").forEach(function (item) {
-      observer.observe(item);
-    });
-  }
-
-  /* ===================================================================
-     INIT ROUTING
-     =================================================================== */
-
-  function initIndexPage() {
-    var grid = document.getElementById("catalogs-grid");
-    if (!grid) return;
-
-    var data = getMergedData();
-    grid.innerHTML = "";
-
-    if (data.length === 0) {
-      grid.innerHTML =
-        '<div class="empty-state">' +
-        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>' +
-        '<h3>Nenhum catálogo disponível</h3>' +
-        '<p>Ainda não há catálogos publicados.</p></div>';
-      return;
-    }
-
-    for (var i = 0; i < data.length; i++) {
-      grid.appendChild(createCatalogCard(data[i]));
-    }
-  }
-
-  function initCatalogPage() {
-    var params = new URLSearchParams(window.location.search);
-    var catalogId = params.get("catalog");
-    var catalog = catalogId ? getCatalogById(catalogId) : null;
-
-    if (!catalog) {
-      document.getElementById("catalog-title").textContent = "Catálogo não encontrado";
-      document.getElementById("catalog-desc").textContent = "O catálogo que procura não existe ou foi removido.";
-      document.getElementById("masonry-grid").innerHTML =
-        '<div class="empty-state"><a href="index.html">&larr; Voltar ao Início</a></div>';
-      return;
-    }
-
-    document.getElementById("catalog-title").textContent = catalog.name;
-    document.getElementById("catalog-desc").textContent = catalog.description || "";
-
-    var counts = itemCounts(catalog);
-    document.getElementById("catalog-count").textContent =
-      counts.photos + " fotos" + (counts.videos > 0 ? ", " + counts.videos + " vídeos" : "");
-
-    document.title = catalog.name + " — EVZA Gallery";
-
-    /* Update breadcrumb */
-    var bcTitle = document.getElementById("breadcrumb-title");
-    if (bcTitle) bcTitle.textContent = catalog.name;
-
-    var grid = document.getElementById("masonry-grid");
-    grid.innerHTML = "";
-    var items = catalog.items || [];
-    for (var i = 0; i < items.length; i++) {
-      var mItem = createMasonryItem(items[i], i);
-      grid.appendChild(mItem);
-      mItem.addEventListener("click", function () {
-        var idx = parseInt(this.dataset.index, 10);
-        openLightbox(items, idx);
-      });
-    }
-
-    setTimeout(initScrollAnimations, 50);
-
-    /* Toolbar buttons */
-    var shareBtnWA = document.getElementById("btn-share-wa");
-    if (shareBtnWA) {
-      shareBtnWA.addEventListener("click", function () {
-        if (typeof EVZAShare !== "undefined") {
-          EVZAShare.shareWhatsApp(catalog);
-        }
-      });
-    }
-
-    var downloadBtn = document.getElementById("btn-download");
-    if (downloadBtn) {
-      downloadBtn.addEventListener("click", function () {
-        if (typeof EVZAShare !== "undefined") {
-          EVZAShare.downloadCatalog(catalog);
-        }
-      });
-    }
-  }
-
-  /* ===================================================================
-     INIT ADMIN PAGE
-     =================================================================== */
-
-  /*
-   * ⚠️ AVISO DE SEGURANÇA: Esta senha é visível no código-fonte.
-   * Para uma solução mais segura, use autenticação no servidor (backend).
-   */
-  var ADMIN_PASSWORD = "evza2025";
-
-  function initAdminPage() {
-    var loginSection = document.getElementById("admin-login");
-    var dashboardSection = document.getElementById("admin-dashboard");
-
-    if (!localStorage.getItem("evza_admin_loggedin")) {
-      loginSection.style.display = "flex";
-      dashboardSection.style.display = "none";
-
-      var loginForm = document.getElementById("login-form");
-      var loginError = document.getElementById("login-error");
-
-      loginForm.addEventListener("submit", function (e) {
-        e.preventDefault();
-        var pwd = document.getElementById("admin-password").value.trim();
-        if (pwd === ADMIN_PASSWORD) {
-          localStorage.setItem("evza_admin_loggedin", "1");
-          loginSection.style.display = "none";
-          dashboardSection.style.display = "block";
-          initAdminDashboard();
-        } else {
-          loginError.style.display = "block";
-          loginError.textContent = "Palavra-passe incorreta. Tente novamente.";
-        }
-      });
-    } else {
-      loginSection.style.display = "none";
-      dashboardSection.style.display = "block";
-      initAdminDashboard();
-    }
-
-    /* Logout */
-    var logoutBtn = document.querySelector("#logout-btn");
-    if (logoutBtn) {
-      logoutBtn.addEventListener("click", function () {
-        localStorage.removeItem("evza_admin_loggedin");
-        window.location.reload();
-      });
-    }
-  }
-
-  function initAdminDashboard() {
-    /* Tabs */
-    var tabs = document.querySelectorAll(".admin-tab");
-    var sections = document.querySelectorAll(".admin-panel-section");
-
-    tabs.forEach(function (tab) {
-      tab.addEventListener("click", function () {
-        var tabId = this.dataset.tab;
-        tabs.forEach(function (t) { t.classList.remove("active"); });
-        sections.forEach(function (s) { s.classList.remove("active"); });
-        this.classList.add("active");
-        document.getElementById(tabId).classList.add("active");
-      });
-    });
-
-    initAddCatalogTab();
-    initAddMediaTab();
-    initExportTab();
-    initManageTab();
-  }
-
-  function initAddCatalogTab() {
-    var form = document.getElementById("add-catalog-form");
-    var msg = document.getElementById("add-catalog-msg");
-    var err = document.getElementById("add-catalog-error");
-
-    form.addEventListener("submit", function (e) {
-      e.preventDefault();
-      err.style.display = "none";
-      msg.style.display = "none";
-
-      var name = document.getElementById("catalog-name").value.trim();
-      if (!name) {
-        err.style.display = "block";
-        err.textContent = "O nome do catálogo é obrigatório.";
-        return;
-      }
-
-      var id = name
-        .toLowerCase()
-        .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-|-$/g, "");
-
-      if (!id || id.length < 2) {
-        err.style.display = "block";
-        err.textContent = "Nome inválido. Use um nome mais descritivo.";
-        return;
-      }
-
-      var coverRaw = document.getElementById("catalog-cover").value.trim();
-      var catalog = {
-        id: id,
-        name: name,
-        description: document.getElementById("catalog-description").value.trim(),
-        cover: extractDriveId(coverRaw),
-        items: []
-      };
-
-      var data = loadAdminData();
-      for (var i = 0; i < data.length; i++) {
-        if (data[i].id === id) {
-          err.style.display = "block";
-          err.textContent = "Já existe um catálogo com este nome.";
-          return;
-        }
-      }
-
-      data.push(catalog);
-      localStorage.setItem("evza_admin_data", JSON.stringify(data));
-
-      msg.style.display = "block";
-      msg.textContent = "Catálogo '" + name + "' adicionado com sucesso!";
-      form.reset();
-      populateCatalogSelect();
-    });
-  }
-
-  function initAddMediaTab() {
-    populateCatalogSelect();
-
-    /* Toggle poster field for video type */
-    var mediaType = document.getElementById("media-type");
-    if (mediaType) {
-      mediaType.addEventListener("change", function () {
-        var posterGroup = document.getElementById("poster-group");
-        if (posterGroup) {
-          posterGroup.style.display = this.value === "video" ? "block" : "none";
-        }
-      });
-    }
-
-    var form = document.getElementById("add-media-form");
-    var msg = document.getElementById("add-media-msg");
-    var err = document.getElementById("add-media-error");
-
-    form.addEventListener("submit", function (e) {
-      e.preventDefault();
-      err.style.display = "none";
-      msg.style.display = "none";
-
-      var catId = document.getElementById("media-catalog").value;
-      var type = document.getElementById("media-type").value;
-      var fileRaw = document.getElementById("media-file").value.trim();
-      var caption = document.getElementById("media-caption").value.trim();
-
-      if (!catId) {
-        err.style.display = "block";
-        err.textContent = "Selecione um catálogo.";
-        return;
-      }
-
-      if (!fileRaw) {
-        err.style.display = "block";
-        err.textContent = "O link do ficheiro é obrigatório.";
-        return;
-      }
-
-      var fileId = extractDriveId(fileRaw);
-      if (!fileId) {
-        err.style.display = "block";
-        err.textContent = "Link não reconhecido. Certifique-se de que é um link válido do Google Drive.";
-        return;
-      }
-
-      var item = {
-        type: type,
-        src: fileId,
-        caption: caption || ""
-      };
-
-      if (type === "video") {
-        var posterRaw = document.getElementById("media-poster").value.trim();
-        item.poster = extractDriveId(posterRaw) || "";
-      }
-
-      /* Check if catalog already exists in admin data */
-      var adminData = loadAdminData();
-      var found = false;
-      for (var i = 0; i < adminData.length; i++) {
-        if (adminData[i].id === catId) {
-          adminData[i].items.push(item);
-          found = true;
-          break;
-        }
-      }
-
-      /* If catalog doesn't exist in admin yet, create it with this item */
-      if (!found) {
-        var allMerged = getMergedData();
-        for (var j = 0; j < allMerged.length; j++) {
-          if (allMerged[j].id === catId) {
-            var adminEntry = {
-              id: allMerged[j].id,
-              name: allMerged[j].name,
-              description: allMerged[j].description,
-              cover: allMerged[j].cover,
-              items: [item]
-            };
-            adminData.push(adminEntry);
-            found = true;
-            break;
-          }
-        }
-      }
-
-      if (found) {
-        localStorage.setItem("evza_admin_data", JSON.stringify(adminData));
-        msg.style.display = "block";
-        msg.textContent = caption
-          ? "Item adicionado: '" + caption + "'"
-          : "Item adicionado ao catálogo!";
-        form.reset();
-        document.getElementById("poster-group").style.display = "none";
-      } else {
-        err.style.display = "block";
-        err.textContent = "Catálogo não encontrado.";
-      }
-    });
-  }
-
-  function populateCatalogSelect() {
-    var select = document.getElementById("media-catalog");
-    if (!select) return;
-    select.innerHTML = '<option value="">Selecione um catálogo…</option>';
-
-    var data = getMergedData();
-    for (var i = 0; i < data.length; i++) {
-      var opt = document.createElement("option");
-      opt.value = data[i].id;
-      opt.textContent = data[i].name;
-      select.appendChild(opt);
-    }
-  }
-
-  function initExportTab() {
-    var exportBtn = document.getElementById("export-btn");
-    if (!exportBtn) return;
-
-    exportBtn.addEventListener("click", function () {
-      var data = getMergedData();
-      var json = JSON.stringify(data, null, 2);
-      var jsContent =
-        "/**\n * EVZA Gallery — Data Configuration\n * Exported from Admin Panel — " +
-        new Date().toISOString().split("T")[0] +
-        "\n */\n\n" +
-        "function driveLink(id) {\n" +
-        "  return 'https://lh3.googleusercontent.com/d/' + id + '=w1200';\n" +
-        "}\n\n" +
-        "function driveDownload(id) {\n" +
-        "  return 'https://drive.google.com/uc?export=download&id=' + id;\n" +
-        "}\n\n" +
-        "const GALLERY_DATA = " + JSON.stringify(data, null, 2) + ";\n";
-
-      var blob = new Blob([jsContent], { type: "application/javascript" });
-      var url = URL.createObjectURL(blob);
-      var a = document.createElement("a");
-      a.href = url;
-      a.download = "data.js";
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    });
-  }
-
-  function initManageTab() {
-    // Sync admin data so all catalogs from data.js are in localStorage
-    syncAdminData();
-    var list = document.getElementById("catalog-list");
-    if (!list) return;
-    renderCatalogList(list);
-  }
-
-  /* ---- Edit media modal ---- */
-  function openEditMediaModal(catalogId, itemIdx) {
-    // Ensure admin data is synced
-    syncAdminData();
-
-    /* Find the catalog from admin data */
-    var adminData = loadAdminData();
-    var catalog = null;
-    for (var c = 0; c < adminData.length; c++) {
-      if (adminData[c].id === catalogId) {
-        catalog = adminData[c];
-        break;
-      }
-    }
-    if (!catalog) return;
-
-    var item = catalog.items[itemIdx];
-    if (!item) return;
-
-    /* Build edit modal */
-    var overlay = document.getElementById("edit-media-overlay");
-    if (!overlay) {
-      overlay = document.createElement("div");
-      overlay.id = "edit-media-overlay";
-      overlay.style.cssText = "display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9000;align-items:center;justify-content:center;";
-      document.body.appendChild(overlay);
-
-      var modal = document.createElement("div");
-      modal.id = "edit-media-modal";
-      modal.style.cssText = "background:#fff;border-radius:12px;padding:1.5rem;width:90%;max-width:500px;max-height:85vh;overflow-y:auto;color:#222;";
-
-      var title = document.createElement("h3");
-      title.id = "edit-media-title";
-      title.style.cssText = "margin:0 0 1rem;font-size:1.1rem;";
-      modal.appendChild(title);
-
-      /* Type */
-      var typeLabel = document.createElement("label");
-      typeLabel.style.cssText = "display:block;font-size:0.85rem;margin-bottom:0.25rem;font-weight:bold;color:#555;";
-      typeLabel.textContent = "Tipo";
-      modal.appendChild(typeLabel);
-      var typeDisplay = document.createElement("input");
-      typeDisplay.id = "edit-item-type";
-      typeDisplay.readOnly = true;
-      typeDisplay.style.cssText = "width:100%;padding:0.5rem;border:1px solid #ccc;border-radius:6px;margin-bottom:1rem;background:#f0f0f0;";
-      modal.appendChild(typeDisplay);
-
-      /* Link */
-      var linkLabel = document.createElement("label");
-      linkLabel.style.cssText = "display:block;font-size:0.85rem;margin-bottom:0.25rem;font-weight:bold;color:#555;";
-      linkLabel.textContent = "Link do ficheiro (Google Drive)";
-      modal.appendChild(linkLabel);
-      var linkInput = document.createElement("input");
-      linkInput.id = "edit-item-link";
-      linkInput.type = "text";
-      linkInput.style.cssText = "width:100%;padding:0.5rem;border:1px solid #ccc;border-radius:6px;margin-bottom:1rem;";
-      modal.appendChild(linkInput);
-
-      /* Poster (hidden for photos) */
-      var posterLabel = document.createElement("label");
-      posterLabel.id = "edit-poster-label";
-      posterLabel.style.cssText = "display:none;font-size:0.85rem;margin-bottom:0.25rem;font-weight:bold;color:#555;";
-      posterLabel.textContent = "Poster do vídeo (opcional)";
-      modal.appendChild(posterLabel);
-      var posterInput = document.createElement("input");
-      posterInput.id = "edit-item-poster";
-      posterInput.type = "text";
-      posterInput.style.cssText = "display:none;width:100%;padding:0.5rem;border:1px solid #ccc;border-radius:6px;margin-bottom:1rem;";
-      modal.appendChild(posterInput);
-
-      /* Caption */
-      var captionLabel = document.createElement("label");
-      captionLabel.style.cssText = "display:block;font-size:0.85rem;margin-bottom:0.25rem;font-weight:bold;color:#555;";
-      captionLabel.textContent = "Legenda";
-      modal.appendChild(captionLabel);
-      var captionInput = document.createElement("input");
-      captionInput.id = "edit-item-caption";
-      captionInput.type = "text";
-      captionInput.style.cssText = "width:100%;padding:0.5rem;border:1px solid #ccc;border-radius:6px;margin-bottom:1.2rem;";
-      modal.appendChild(captionInput);
-
-      /* Buttons */
-      var btnRow = document.createElement("div");
-      btnRow.style.cssText = "display:flex;gap:0.5rem;justify-content:flex-end;";
-
-      var cancelBtn = document.createElement("button");
-      cancelBtn.textContent = "Cancelar";
-      cancelBtn.style.cssText = "padding:0.5rem 1.2rem;border:1px solid #ccc;border-radius:6px;background:#f5f5f5;cursor:pointer;";
-      cancelBtn.addEventListener("click", function () { closeEditModal(overlay); });
-      btnRow.appendChild(cancelBtn);
-
-      var saveBtn = document.createElement("button");
-      saveBtn.textContent = "Guardar";
-      saveBtn.style.cssText = "padding:0.5rem 1.2rem;border:none;border-radius:6px;color:#fff;cursor:pointer;font-weight:bold;";
-      btnRow.appendChild(saveBtn);
-
-      modal.appendChild(btnRow);
-      overlay.appendChild(modal);
-
-      overlay.addEventListener("click", function (e) {
-        if (e.target === overlay) closeEditModal(overlay);
-      });
-    }
-
-    /* Fill values */
-    document.getElementById("edit-media-title").textContent = "Editar ficheiro — " + catalog.name;
-    document.getElementById("edit-item-type").value = item.type === "video" ? "Vídeo" : "Fotografia";
-    document.getElementById("edit-item-link").value = "https://drive.google.com/file/d/" + item.src + "/view";
-    document.getElementById("edit-item-caption").value = item.caption || "";
-
-    var posterLabelEl = document.getElementById("edit-poster-label");
-    var posterInputEl = document.getElementById("edit-item-poster");
-    if (item.type === "video") {
-      posterLabelEl.style.display = "block";
-      posterInputEl.style.display = "block";
-      posterInputEl.value = item.poster ? "https://drive.google.com/file/d/" + item.poster + "/view" : "";
-    } else {
-      posterLabelEl.style.display = "none";
-      posterInputEl.style.display = "none";
-      posterInputEl.value = "";
-    }
-
-    overlay.style.display = "flex";
-
-    /* Save logic */
-    var saveBtnHandler = function () {
-      var rawLink = document.getElementById("edit-item-link").value.trim();
-      var newSrc = extractDriveId(rawLink);
-      if (!newSrc) {
-        alert("Link não reconhecido.");
-        return;
-      }
-
-      var newCaption = document.getElementById("edit-item-caption").value.trim();
-      var newPoster = "";
-      if (item.type === "video") {
-        var rawPoster = document.getElementById("edit-item-poster").value.trim();
-        newPoster = extractDriveId(rawPoster) || "";
-      }
-
-      /* Update in admin data */
-      var data = loadAdminData();
-      for (var i = 0; i < data.length; i++) {
-        if (data[i].id === catalogId) {
-          data[i].items[itemIdx].src = newSrc;
-          data[i].items[itemIdx].caption = newCaption;
-          if (item.type === "video") {
-            data[i].items[itemIdx].poster = newPoster;
-          }
-          break;
-        }
-      }
-      localStorage.setItem("evza_admin_data", JSON.stringify(data));
-
-      closeEditModal(overlay);
-
-      /* Refresh the list */
-      var catalogListEl = document.getElementById("catalog-list");
-      if (catalogListEl) renderCatalogList(catalogListEl);
-      populateCatalogSelect();
+  return data || fallback;
+}
+
+export async function loadCatalogs(filter = {}) {
+  const catalogs = await safeQuery(async () => {
+    let q = supabase.from('catalogs').select('*, media_items(id,type)', { count: 'exact' }).order('sort_order').order('event_date', { ascending: false });
+    if (filter.featured) q = q.eq('is_featured', true);
+    return q;
+  });
+  return catalogs.map((cat) => {
+    const items = cat.media_items || [];
+    return {
+      ...cat,
+      photoCount: items.filter((i) => i.type === 'photo').length,
+      videoCount: items.filter((i) => i.type === 'video').length
     };
+  });
+}
 
-    document.querySelector("#edit-media-modal button:last-child").removeEventListener("click", saveBtnHandler);
-    var newSaveBtn = document.querySelector("#edit-media-modal button:last-child");
-    newSaveBtn.textContent = "Guardar";
-    newSaveBtn.style.background = "#2a7ae4";
-    newSaveBtn.onclick = saveBtnHandler;
+async function loadHome() {
+  loadHeroStatuses();
+  state.catalogs = await loadCatalogs();
+  renderCatalogGrid(state.catalogs.filter((c) => c.is_featured), $('#featured-grid'), true);
+  $('#featured-section')?.toggleAttribute('hidden', !state.catalogs.some((c) => c.is_featured));
+  renderCatalogGrid(state.catalogs, $('#catalog-grid'));
+  renderYearFilters(state.catalogs);
+}
+
+async function loadHeroStatuses() {
+  const host = $('#hero-status');
+  if (!host || !supabase) return;
+  const items = await safeQuery(() => supabase.from('status_items').select('*').gt('expires_at', new Date().toISOString()).order('sort_order').order('created_at', { ascending: false }).limit(12), []);
+  if (!items.length) {
+    host.innerHTML = '';
+    host.hidden = true;
+    return;
   }
+  host.hidden = false;
+  host.innerHTML = `<div class="status-head"><span>Estados EVZA</span><small>${items.length} novo${items.length > 1 ? 's' : ''}</small></div><div class="status-strip">${items.map((item, i) => renderStatusPreview(item, i)).join('')}</div>`;
+  host.addEventListener('click', (e) => {
+    const item = e.target.closest('[data-status-index]');
+    if (item) openStatusViewer(items, Number(item.dataset.statusIndex));
+  });
+}
 
-  function closeEditModal(overlay) {
-    if (overlay) overlay.style.display = "none";
-  }
+function renderStatusPreview(item, index) {
+  const src = resolveUrl(item);
+  const poster = itemPoster(item);
+  return `<button class="status-card" data-status-index="${index}" aria-label="${escapeHtml(item.caption || 'Estado EVZA')}">
+    ${item.type === 'video' ? `<div class="status-media video-tile"${videoTileStyle(item)}><span class="play-mark">▶</span></div>` : `<img class="status-media" src="${escapeHtml(src)}" alt="" onerror="this.src='assets/placeholder.svg'">`}
+    <span>${escapeHtml(item.caption || (item.type === 'video' ? 'Vídeo' : 'Foto'))}</span>
+  </button>`;
+}
 
-  /* Sync admin data with data.js: if a catalog from data.js has items with src, merge them
-     into admin copy so edits/deletions work on the full set */
-  function syncAdminData() {
-    var adminData = loadAdminData();
-    var galleryData = typeof GALLERY_DATA !== "undefined" ? GALLERY_DATA : [];
-
-    for (var gi = 0; gi < galleryData.length; gi++) {
-      var gCatalog = galleryData[gi];
-      var adminIdx = -1;
-      for (var ai = 0; ai < adminData.length; ai++) {
-        if (adminData[ai].id === gCatalog.id) {
-          adminIdx = ai;
-          break;
-        }
-      }
-
-      /* Check if original data.js catalog has items not in admin copy */
-      if (adminIdx >= 0) {
-        /* Merge missing items from data.js */
-        var adminItemKeys = {};
-        for (var ai2 = 0; ai2 < adminData[adminIdx].items.length; ai2++) {
-          var item = adminData[adminIdx].items[ai2];
-          if (item.src && item.src !== "") {
-            adminItemKeys[item.type + "|" + item.src] = true;
-          }
-        }
-        /* Only add items that actually exist in admin data (from user adding via admin) */
-        var newItems = [];
-        for (var di = 0; di < gCatalog.items.length; di++) {
-          var key = gCatalog.items[di].type + "|" + gCatalog.items[di].src;
-          if (!adminItemKeys[key] && gCatalog.items[di].src && gCatalog.items[di].src !== "") {
-            newItems.push(gCatalog.items[di]);
-          }
-        }
-        for (var add = 0; add < newItems.length; add++) {
-          adminData[adminIdx].items.push(newItems[add]);
-        }
-      } else {
-        /* Not in admin at all — create entry from data.js */
-        var adminEntry = {
-          id: gCatalog.id,
-          name: gCatalog.name,
-          description: gCatalog.description,
-          cover: gCatalog.cover,
-          items: []
-        };
-        /* Only create entry if catalog has items */
-        for (var di2 = 0; di2 < gCatalog.items.length; di2++) {
-          if (gCatalog.items[di2].src && gCatalog.items[di2].src !== "") {
-            adminEntry.items.push(gCatalog.items[di2]);
-          }
-        }
-        adminData.push(adminEntry);
-      }
-    }
-
-    localStorage.setItem("evza_admin_data", JSON.stringify(adminData));
-    return adminData;
-  }
-
-  function renderCatalogList(listEl) {
-    var data = getMergedData();
-    listEl.innerHTML = "";
-
-    if (data.length === 0) {
-      listEl.innerHTML =
-        '<p style="color:var(--text-secondary);font-size:0.9rem;padding:1rem 0;">Nenhum catálogo disponível.</p>';
-      return;
-    }
-
-    for (var i = 0; i < data.length; i++) {
-      (function (catalog, idx) {
-        var counts = itemCounts(catalog);
-        var section = document.createElement("div");
-        section.style.cssText = "padding:0.75rem 0;border-bottom:1px solid var(--offwhite-dark);";
-
-        /* Catalog header */
-        var header = document.createElement("div");
-        header.style.cssText = "display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;";
-        header.innerHTML =
-          '<div>' +
-          '<strong>' + catalog.name + '</strong>' +
-          '<span style="font-size:0.82rem;color:var(--text-secondary);margin-left:0.5rem;">' +
-          counts.total + " ficheiros</span>" +
-          "</div>";
-
-        var delCatBtn = document.createElement("button");
-        delCatBtn.className = "btn btn-sm btn-primary";
-        delCatBtn.textContent = "Eliminar catlogo";
-        delCatBtn.style.background = "#cc3333";
-        delCatBtn.style.cursor = "pointer";
-        delCatBtn.addEventListener("click", function () {
-          if (confirm("Tem certeza que deseja eliminar o catlogo \u00ab" + catalog.name + "\u00bb?")) {
-            var adminData = loadAdminData();
-            adminData.splice(idx, 1);
-            localStorage.setItem("evza_admin_data", JSON.stringify(adminData));
-            renderCatalogList(listEl);
-            populateCatalogSelect();
-          }
-        });
-        header.appendChild(delCatBtn);
-        section.appendChild(header);
-
-        /* Media items list */
-        var itemsList = document.createElement("div");
-        itemsList.style.cssText = "margin-top:0.5rem;padding-left:0.5rem;";
-
-        var items = catalog.items || [];
-        if (items.length === 0) {
-          itemsList.innerHTML = '<p style="font-size:0.82rem;color:var(--text-secondary);">Nenhum ficheiro adicionado.</p>';
-        } else {
-          for (var j = 0; j < items.length; j++) {
-            (function (item, itemIdx) {
-              var itemRow = document.createElement("div");
-              itemRow.style.cssText = "display:flex;align-items:center;justify-content:space-between;padding:0.4rem 0;border-top:1px solid #eee;font-size:0.85rem;";
-
-              var itemInfo = document.createElement("div");
-              itemInfo.style.cssText = "flex:1;overflow:hidden;";
-              var iconText = item.type === "video" ? "\uD83C\uDFAC" : "\uD83D\uDCF7";
-              itemInfo.innerHTML = '<span>' + iconText + ' ' + (item.caption || "Sem legenda") + '</span>';
-
-              var btnGroup = document.createElement("div");
-              btnGroup.style.cssText = "display:flex;gap:0.4rem;align-items:center;flex-shrink:0;";
-
-              /* Edit button */
-              var editBtn = document.createElement("button");
-              editBtn.textContent = "Editar";
-              editBtn.style.cssText = "padding:0.25rem 0.6rem;border:1px solid #2a7ae4;background:#2a7ae4;color:#fff;font-size:0.75rem;border-radius:4px;cursor:pointer;font-weight:bold;";
-              editBtn.title = "Editar ficheiro";
-              editBtn.addEventListener("click", function () {
-                openEditMediaModal(catalog.id, itemIdx);
-              });
-
-              /* Delete button */
-              var itemDelBtn = document.createElement("button");
-              itemDelBtn.textContent = "\u00D7";
-              itemDelBtn.style.cssText = "width:28px;height:28px;border:none;background:#cc3333;color:#fff;font-size:1.1rem;border-radius:50%;cursor:pointer;";
-              itemDelBtn.title = "Eliminar ficheiro";
-              itemDelBtn.addEventListener("click", function () {
-                if (confirm("Eliminar este ficheiro" + (item.caption ? ": \u00ab" + item.caption + "\u00bb" : "") + "?")) {
-                  var a = loadAdminData();
-                  for (var c = 0; c < a.length; c++) {
-                    if (a[c].id === catalog.id) {
-                      a[c].items.splice(itemIdx, 1);
-                      break;
-                    }
-                  }
-                  localStorage.setItem("evza_admin_data", JSON.stringify(a));
-                  renderCatalogList(listEl);
-                  populateCatalogSelect();
-                }
-              });
-
-              btnGroup.appendChild(editBtn);
-              btnGroup.appendChild(itemDelBtn);
-              itemRow.appendChild(itemInfo);
-              itemRow.appendChild(btnGroup);
-              itemsList.appendChild(itemRow);
-            })(items[j], j);
-          }
-        }
-
-        section.appendChild(itemsList);
-        listEl.appendChild(section);
-      })(data[i], i);
-    }
-  }
-
-  /* ===================================================================
-     BOOTSTRAP
-     =================================================================== */
-
-  function init() {
-    initNavbar();
-    initLightbox();
-
-    /* Dynamic footer year */
-    document.querySelectorAll(".footer-year, #footer-year").forEach(function (el) {
-      el.textContent = new Date().getFullYear();
+function openStatusViewer(items, index = 0) {
+  state.statusItems = items;
+  state.statusIndex = index;
+  let viewer = $('#status-viewer');
+  if (!viewer) {
+    viewer = document.createElement('div');
+    viewer.id = 'status-viewer';
+    viewer.className = 'status-viewer';
+    viewer.innerHTML = `<button class="icon-btn status-close" data-status-close>×</button><button class="icon-btn status-nav status-prev" data-status-nav="-1">←</button><div id="status-body"></div><button class="icon-btn status-nav status-next" data-status-nav="1">→</button>`;
+    document.body.appendChild(viewer);
+    viewer.addEventListener('click', (e) => {
+      if (e.target === viewer || e.target.closest('[data-status-close]')) viewer.classList.remove('open');
+      const nav = e.target.closest('[data-status-nav]');
+      if (nav) paintStatusViewer(Number(nav.dataset.statusNav));
+      const like = e.target.closest('[data-status-like]');
+      if (like) toggleStatusLike(like.dataset.statusLike);
+      const toggleComments = e.target.closest('[data-status-comments-toggle]');
+      if (toggleComments) $('#status-body')?.classList.toggle('comments-open');
+      const reply = e.target.closest('[data-status-reply]');
+      if (reply) showStatusReplyForm(reply.dataset.statusReply, reply.dataset.author);
+      const commentLike = e.target.closest('[data-status-comment-like]');
+      if (commentLike) toggleStatusCommentLike(commentLike.dataset.statusCommentLike);
     });
-
-    if (document.getElementById("catalogs-grid")) initIndexPage();
-    if (document.getElementById("masonry-grid")) initCatalogPage();
-    if (document.getElementById("admin-login")) initAdminPage();
   }
+  viewer.classList.add('open');
+  paintStatusViewer(0);
+}
 
-  /* ===================================================================
-     UPDATE NOTIFICATION — listens for SW messages
-     =================================================================== */
+async function paintStatusViewer(dir = 0) {
+  if (dir) state.statusIndex = (state.statusIndex + dir + state.statusItems.length) % state.statusItems.length;
+  const item = state.statusItems[state.statusIndex];
+  const src = resolveUrl(item);
+  const driveId = itemDriveId(item);
+  const comments = await loadStatusComments(item.id);
+  $('#status-body').innerHTML = `<div class="status-full">
+    ${item.type === 'video'
+      ? (driveId ? `<iframe src="${escapeHtml(drivePreviewUrl(driveId))}" allow="autoplay; fullscreen" allowfullscreen></iframe>` : `<video src="${escapeHtml(src)}" poster="${escapeHtml(itemPoster(item))}" controls autoplay></video>`)
+      : `<img src="${escapeHtml(src)}" alt="${escapeHtml(item.caption || 'Estado EVZA')}" onerror="this.src='assets/placeholder.svg'">`}
+    <div class="status-caption">
+      <p>${escapeHtml(item.caption || 'Estado EVZA')}</p>
+    </div>
+    <div class="status-actions">
+      <button class="status-action-btn" data-status-like="${item.id}" aria-label="Gostar estado">${shareIcon('heart')} <span>${fmtNum(item.likes)}</span></button>
+      <button class="status-action-btn" data-status-comments-toggle aria-label="Comentar estado">${shareIcon('comment')} <span>${comments.length}</span></button>
+    </div>
+  </div>
+  <aside class="status-comments">
+    <h3>Comentários</h3>
+    <div id="status-comment-list">${renderStatusCommentTree(comments)}</div>
+    <form class="status-comment-form form-grid" id="status-comment-form">
+      <input class="field" name="author" placeholder="O seu nome" required>
+      <textarea class="full" name="body" rows="3" maxlength="500" placeholder="Comentar estado" required></textarea>
+      <button class="btn" type="submit">Enviar</button>
+    </form>
+  </div>`;
+  $('#status-comment-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const f = new FormData(e.currentTarget);
+    const { error } = await supabase.from('status_comments').insert({ status_id: item.id, author: f.get('author'), body: f.get('body'), is_admin: await isAdminSession(), approved: true });
+    if (error) return toast(error.message.includes('status_comments') ? 'Execute update-status-interactions.sql no Supabase.' : error.message);
+    toast('Comentário publicado.');
+    paintStatusViewer(0);
+  });
+}
 
-  function initUpdateNotification() {
-    if (!("serviceWorker" in navigator)) return;
+async function loadStatusComments(statusId) {
+  return safeQuery(() => supabase.from('status_comments').select('*').eq('status_id', statusId).eq('approved', true).order('created_at', { ascending: true }), []);
+}
 
-    navigator.serviceWorker.ready.then(function (reg) {
-      reg.active.postMessage({ type: "force_check" });
-    }).catch(function () {});
+function renderStatusCommentTree(comments = []) {
+  if (!comments.length) return '<p class="meta">Ainda sem comentários.</p>';
+  const parents = comments.filter((c) => !c.parent_id);
+  const children = comments.filter((c) => c.parent_id);
+  return parents.map((comment) => renderStatusComment(comment, children.filter((c) => c.parent_id === comment.id))).join('');
+}
 
-    navigator.serviceWorker.addEventListener("message", function (e) {
-      if (e.data && e.data.type === "new_version") {
-        showUpdateBanner(e.data);
-      }
+function renderStatusComment(comment, replies = []) {
+  return `<div class="comment ${comment.is_admin ? 'official-comment' : ''}" id="status-comment-${comment.id}">
+    <strong>${escapeHtml(comment.author)}</strong>${comment.is_admin ? '<span class="official-badge">Administrador EVZA</span>' : ''}
+    <p>${escapeHtml(comment.body)}</p>
+    <div class="comment-actions">
+      <span class="meta">${new Date(comment.created_at).toLocaleDateString('pt-MZ')}</span>
+      <button class="comment-action" data-status-comment-like="${comment.id}">Gostar · ${fmtNum(comment.likes)}</button>
+      <button class="comment-action" data-status-reply="${comment.id}" data-author="${escapeHtml(comment.author)}">Responder</button>
+    </div>
+    <div class="reply-host" id="status-reply-host-${comment.id}"></div>
+    ${replies.length ? `<div class="replies">${replies.map((reply) => renderStatusComment(reply, [])).join('')}</div>` : ''}
+  </div>`;
+}
+
+function showStatusReplyForm(parentId, author = '') {
+  const host = $(`#status-reply-host-${parentId}`);
+  const item = state.statusItems[state.statusIndex];
+  if (!host || !item) return;
+  host.innerHTML = `<form class="reply-form form-grid">
+    <input class="field" name="author" placeholder="O seu nome" required>
+    <textarea class="full" name="body" maxlength="500" rows="3" placeholder="Responder a ${escapeHtml(author)}" required></textarea>
+    <button class="btn" type="submit">Responder</button>
+  </form>`;
+  host.querySelector('form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const f = new FormData(e.currentTarget);
+    const { error } = await supabase.from('status_comments').insert({ status_id: item.id, parent_id: parentId, author: f.get('author'), body: f.get('body'), is_admin: await isAdminSession(), approved: true });
+    if (error) return toast(error.message.includes('parent_id') ? 'Execute update-status-interactions.sql no Supabase.' : error.message);
+    toast('Resposta publicada.');
+    paintStatusViewer(0);
+  });
+}
+
+async function toggleStatusLike(statusId) {
+  const existing = await safeQuery(() => supabase.from('status_likes').select('id').eq('status_id', statusId).eq('device_id', deviceId()).limit(1), []);
+  if (existing.length) return toast('Já gostou deste estado neste dispositivo.');
+  const { error } = await supabase.from('status_likes').insert({ status_id: statusId, device_id: deviceId() });
+  if (error) return toast(error.message.includes('status_likes') ? 'Execute update-status-interactions.sql no Supabase.' : error.message);
+  state.statusItems[state.statusIndex].likes = (state.statusItems[state.statusIndex].likes || 0) + 1;
+  toast('Gostou deste estado.');
+  paintStatusViewer(0);
+}
+
+async function toggleStatusCommentLike(commentId) {
+  const existing = await safeQuery(() => supabase.from('status_comment_likes').select('id').eq('comment_id', commentId).eq('device_id', deviceId()).limit(1), []);
+  if (existing.length) return toast('Já gostou deste comentário neste dispositivo.');
+  const { error } = await supabase.from('status_comment_likes').insert({ comment_id: commentId, device_id: deviceId() });
+  if (error) return toast(error.message.includes('status_comment_likes') ? 'Execute update-status-interactions.sql no Supabase.' : error.message);
+  toast('Gostou do comentário.');
+  paintStatusViewer(0);
+}
+
+function renderYearFilters(catalogs) {
+  const host = $('#year-filters');
+  if (!host) return;
+  const years = [...new Set(catalogs.map((c) => c.event_date?.slice(0, 4)).filter(Boolean))].sort((a, b) => b - a);
+  host.innerHTML = ['Todos', ...years].map((y, i) => `<button class="filter ${i === 0 ? 'active' : ''}" data-year="${y}">${y}</button>`).join('');
+  host.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-year]');
+    if (!btn) return;
+    $$('.filter', host).forEach((b) => b.classList.remove('active'));
+    btn.classList.add('active');
+    filterByYear(btn.dataset.year);
+  });
+}
+
+export function filterByYear(year) {
+  renderCatalogGrid(year === 'Todos' ? state.catalogs : state.catalogs.filter((c) => c.event_date?.startsWith(year)), $('#catalog-grid'));
+}
+
+export function renderCatalogGrid(catalogs, host = $('#catalog-grid'), featured = false) {
+  if (!host) return;
+  if (!catalogs.length) {
+    host.innerHTML = `<div class="empty"><h3>Nenhum catálogo ainda</h3><p>O administrador ainda não adicionou catálogos.</p></div>`;
+    return;
+  }
+  host.innerHTML = catalogs.map((cat, i) => `
+    <a class="card catalog-card fade-up" style="--delay:${i * 70}ms" href="catalog.html?id=${cat.id}">
+      <div class="media skeleton">
+        <img src="${escapeHtml(catalogCover(cat))}" alt="${escapeHtml(cat.name)}" loading="lazy" onerror="this.src='assets/placeholder.svg'">
+        <div class="overlay-bottom">
+          ${featured || cat.is_featured ? '<span class="badge">★ Destaque</span>' : ''}
+          <h3>${escapeHtml(cat.name)}</h3>
+          <div class="meta">${fmtDate(cat.event_date)}</div>
+          <div class="stat-row">
+            <span class="badge">${fmtNum(cat.photoCount)} fotos · ${fmtNum(cat.videoCount)} vídeos</span>
+            <span class="badge">👁 ${fmtNum(cat.views)}</span>
+          </div>
+        </div>
+      </div>
+    </a>`).join('');
+}
+
+export async function loadCatalog(id) {
+  if (!id) return null;
+  const [catalog] = await safeQuery(() => supabase.from('catalogs').select('*').eq('id', id).limit(1), []);
+  const items = await safeQuery(() => supabase.from('media_items').select('*').eq('catalog_id', id).order('sort_order').order('created_at'), []);
+  return catalog ? { catalog, items } : null;
+}
+
+async function loadCatalogPage() {
+  const id = new URLSearchParams(location.search).get('id');
+  const data = await loadCatalog(id);
+  const host = $('#catalog-content');
+  if (!data) {
+    host.innerHTML = `<div class="empty"><h2>Catálogo não encontrado</h2><a class="btn" href="index.html">Voltar</a></div>`;
+    return;
+  }
+  state.currentCatalog = data.catalog;
+  state.media = data.items;
+  document.title = `${data.catalog.name} — EVZA Gallery`;
+  updateMeta(data.catalog.name, data.catalog.description || cfg.schoolName, catalogCover(data.catalog));
+  trackView('catalog', id);
+  host.innerHTML = catalogHeader(data.catalog, data.items);
+  renderMasonry(data.items);
+  initLightbox();
+  initComments();
+  initRealtime(id);
+}
+
+function catalogHeader(cat, items) {
+  const photos = items.filter((i) => i.type === 'photo').length;
+  const videos = items.length - photos;
+  return `
+    <section class="catalog-hero"><div class="wrap">
+      <a href="index.html" class="btn ghost">← Voltar</a>
+      <h1>${escapeHtml(cat.name)}</h1>
+      <p>${escapeHtml(cat.description || 'Memórias vivas da nossa comunidade escolar.')}</p>
+      <div class="stat-row"><span class="badge">${fmtDate(cat.event_date)}</span><span class="badge">${photos} fotos · ${videos} vídeos · ${fmtNum(cat.views)} visualizações</span><span class="badge">${fmtNum(cat.likes)} gostos</span></div>
+      <div class="stat-row"><button class="btn" data-catalog-like="${cat.id}">Gostar Catálogo · ${fmtNum(cat.likes)}</button><button class="btn" data-share="catalog" data-id="${cat.id}">Partilhar Catálogo</button><button class="btn secondary" data-slideshow-start>Iniciar Slideshow</button></div>
+    </div></section>
+    <section class="section"><div class="wrap"><div id="masonry" class="masonry"></div><div class="comment-box" id="comments"></div></div></section>`;
+}
+
+export function renderMasonry(items) {
+  const host = $('#masonry');
+  if (!host) return;
+  if (!items.length) {
+    host.innerHTML = `<div class="empty"><h3>Sem media neste catálogo</h3><p>As fotos e vídeos aparecerão aqui.</p></div>`;
+    return;
+  }
+  host.innerHTML = items.map((item, i) => {
+    const src = resolveUrl(item);
+    const media = item.type === 'video'
+      ? `<div class="video-tile"${videoTileStyle(item)}><span class="play-mark">▶</span><span class="badge">Vídeo</span><span class="video-label">Pré-visualização do vídeo</span></div>`
+      : `<img src="${escapeHtml(src || 'assets/placeholder.svg')}" alt="${escapeHtml(item.caption || 'Foto EVZA')}" loading="lazy" decoding="async" onerror="this.src='assets/placeholder.svg'">`;
+    return `<article class="masonry-item" data-index="${i}" data-id="${item.id}">
+      ${media}
+      <div class="media-hover"><p>${escapeHtml(item.caption || 'Momento EVZA')}</p><button class="btn" data-like="${item.id}">Gostar · ${fmtNum(item.likes)}</button></div>
+    </article>`;
+  }).join('');
+  const io = new IntersectionObserver((entries) => entries.forEach((e) => e.isIntersecting && e.target.classList.add('visible')), { threshold: .1 });
+  $$('.masonry-item', host).forEach((el) => io.observe(el));
+}
+
+function initLightbox() {
+  $('#masonry')?.addEventListener('click', (e) => {
+    const like = e.target.closest('[data-like]');
+    if (like) return toggleLike(like.dataset.like);
+    const item = e.target.closest('.masonry-item');
+    if (item) openLightbox(state.media, Number(item.dataset.index));
+  });
+  document.addEventListener('click', (e) => {
+    const share = e.target.closest('[data-share]');
+    if (share && share.dataset.share === 'catalog') openCatalogShareDialog();
+    else if (share) shareItem(share.dataset.share, share.dataset.id);
+    const catalogLike = e.target.closest('[data-catalog-like]');
+    if (catalogLike) toggleCatalogLike(catalogLike.dataset.catalogLike);
+    if (e.target.closest('[data-slideshow-start]')) startSlideshow();
+  });
+  document.addEventListener('keydown', handleKeyboard);
+}
+
+export function openLightbox(items, index = 0) {
+  state.media = items;
+  state.lightboxIndex = index;
+  let lb = $('#lightbox');
+  if (!lb) {
+    lb = document.createElement('div');
+    lb.id = 'lightbox';
+    lb.className = 'lightbox';
+    lb.innerHTML = `<div class="lightbox-top"><button class="icon-btn" data-close>×</button><div class="progress"><span></span></div></div><button class="icon-btn lightbox-nav prev" data-nav="-1">←</button><div id="lightbox-body"></div><button class="icon-btn lightbox-nav next" data-nav="1">→</button><div class="lightbox-bottom"><span id="lightbox-count"></span><span id="lightbox-caption"></span><button class="btn" data-lb-like>Gostar</button><button class="btn ghost" data-lb-share>Partilhar</button><a class="btn secondary" id="lightbox-download" download>Descarregar</a></div>`;
+    document.body.appendChild(lb);
+    lb.addEventListener('click', (e) => {
+      if (e.target === lb || e.target.closest('[data-close]')) closeLightbox();
+      const nav = e.target.closest('[data-nav]');
+      if (nav) navigateLightbox(Number(nav.dataset.nav));
+      if (e.target.closest('[data-lb-share]')) shareItem('photo', state.media[state.lightboxIndex].id);
+      if (e.target.closest('[data-lb-like]')) toggleLike(state.media[state.lightboxIndex].id);
     });
-
-    /* Also check on load — store current version */
-    fetch("version.json", { cache: "no-cache" })
-      .then(function (res) {
-        if (!res.ok) throw new Error("version.json not found");
-        return res.json();
-      })
-      .then(function (data) {
-        if (!data || !data.version) return;
-        var stored = localStorage.getItem("evza_last_seen_version");
-        var last = stored ? JSON.parse(stored) : {};
-        if (last.version && last.version !== data.version) {
-          showUpdateBanner(data);
-        }
-        localStorage.setItem("evza_last_seen_version", JSON.stringify(data));
-      })
-      .catch(function () {});
+    let startX = 0;
+    lb.addEventListener('touchstart', (e) => startX = e.changedTouches[0].screenX, { passive: true });
+    lb.addEventListener('touchend', (e) => {
+      const dx = e.changedTouches[0].screenX - startX;
+      if (Math.abs(dx) > 50) navigateLightbox(dx < 0 ? 1 : -1);
+    }, { passive: true });
   }
+  lb.classList.add('open');
+  paintLightbox();
+}
 
-  function showUpdateBanner(data) {
-    var existing = document.getElementById("update-banner");
-    if (existing) return;
+function paintLightbox() {
+  const item = state.media[state.lightboxIndex];
+  if (!item) return;
+  const src = resolveUrl(item);
+  const driveId = itemDriveId(item);
+  $('#lightbox-body').innerHTML = item.type === 'video'
+    ? (driveId
+      ? `<iframe class="lightbox-media lightbox-frame" src="${escapeHtml(drivePreviewUrl(driveId))}" allow="autoplay; fullscreen" allowfullscreen title="${escapeHtml(item.caption || 'Vídeo EVZA')}"></iframe>`
+      : `<video class="lightbox-media" src="${escapeHtml(src)}" poster="${escapeHtml(itemPoster(item))}" controls autoplay></video>`)
+    : `<img class="lightbox-media" src="${escapeHtml(src)}" alt="${escapeHtml(item.caption || 'Foto EVZA')}">`;
+  $('#lightbox-count').textContent = `${state.lightboxIndex + 1} / ${state.media.length}`;
+  $('#lightbox-caption').textContent = item.caption || 'Momento EVZA';
+  $('#lightbox-download').href = src;
+  trackView('media', item.id);
+}
 
-    var catalogName = "";
-    if (data.newCatalogs && data.newCatalogs.length > 0) {
-      var catalog = getCatalogById(data.newCatalogs[0]);
-      catalogName = catalog ? catalog.name : data.newCatalogs[0];
+export function navigateLightbox(dir) {
+  state.lightboxIndex = (state.lightboxIndex + dir + state.media.length) % state.media.length;
+  paintLightbox();
+}
+export function closeLightbox() { $('#lightbox')?.classList.remove('open'); stopSlideshow(); }
+export function startSlideshow() {
+  if (!state.media.length) return;
+  openLightbox(state.media, state.lightboxIndex || 0);
+  $('.progress')?.classList.add('playing');
+  $('.progress')?.style.setProperty('--slide-ms', `${cfg.slideshowDelay}ms`);
+  clearInterval(state.slideshow);
+  state.slideshow = setInterval(() => navigateLightbox(1), cfg.slideshowDelay);
+}
+export function stopSlideshow() { clearInterval(state.slideshow); $('.progress')?.classList.remove('playing'); }
+export function handleKeyboard(e) {
+  if (!$('#lightbox')?.classList.contains('open')) return;
+  if (e.key === 'Escape') closeLightbox();
+  if (e.key === 'ArrowRight') navigateLightbox(1);
+  if (e.key === 'ArrowLeft') navigateLightbox(-1);
+  if (e.key === ' ') { e.preventDefault(); state.slideshow ? stopSlideshow() : startSlideshow(); }
+  if (e.key.toLowerCase() === 'f') $('.lightbox-media')?.requestFullscreen?.();
+}
+
+function deviceId() {
+  let id = localStorage.getItem('evza-device-id');
+  if (!id) { id = crypto.randomUUID(); localStorage.setItem('evza-device-id', id); }
+  return id;
+}
+
+export async function hasLiked(mediaId) {
+  if (!supabase) return false;
+  const data = await safeQuery(() => supabase.from('likes').select('id').eq('media_id', mediaId).eq('device_id', deviceId()).limit(1), []);
+  return data.length > 0;
+}
+
+export async function toggleLike(mediaId) {
+  if (!cfg.enableLikes || !supabase) return toast('Likes disponíveis depois de configurar o Supabase.');
+  if (await hasLiked(mediaId)) return toast('Já gostou desta foto neste dispositivo.');
+  const { error } = await supabase.from('likes').insert({ media_id: mediaId, device_id: deviceId() });
+  if (error) return toast(error.message);
+  toast('Gostou deste momento!');
+}
+
+export async function hasCatalogLiked(catalogId) {
+  if (!supabase) return false;
+  const data = await safeQuery(() => supabase.from('catalog_likes').select('id').eq('catalog_id', catalogId).eq('device_id', deviceId()).limit(1), []);
+  return data.length > 0;
+}
+
+export async function toggleCatalogLike(catalogId) {
+  if (!supabase) return toast('Likes disponíveis depois de configurar o Supabase.');
+  if (await hasCatalogLiked(catalogId)) return toast('Já gostou deste catálogo neste dispositivo.');
+  const { error } = await supabase.from('catalog_likes').insert({ catalog_id: catalogId, device_id: deviceId() });
+  if (error) return toast(error.message.includes('Could not find') ? 'Execute update-comments-likes.sql no Supabase para activar likes.' : error.message);
+  toast('Gostou deste catálogo!');
+  const data = await loadCatalog(catalogId);
+  if (data) {
+    state.currentCatalog = data.catalog;
+    state.media = data.items;
+    $('#catalog-content').innerHTML = catalogHeader(data.catalog, data.items);
+    renderMasonry(data.items);
+    initComments();
+  }
+}
+
+export function getShareUrl(type, id) {
+  const page = type === 'photo' ? 'photo.html' : 'catalog.html';
+  return `${cfg.siteUrl}/${page}?id=${encodeURIComponent(id)}`;
+}
+
+export async function shareItem(type, id) {
+  const url = getShareUrl(type, id);
+  const title = type === 'photo' ? 'Foto da EVZA Gallery' : 'Catálogo da EVZA Gallery';
+  if (navigator.share) {
+    await navigator.share({ title, url }).catch(() => null);
+    toast('Partilhado com sucesso!');
+  } else {
+    await navigator.clipboard.writeText(url);
+    toast('Link copiado!');
+  }
+}
+
+function openCatalogShareDialog(catalog = state.currentCatalog, items = state.media) {
+  if (!catalog) return;
+  const url = getShareUrl('catalog', catalog.id);
+  let dialog = $('#share-dialog');
+  if (!dialog) {
+    dialog = document.createElement('div');
+    dialog.id = 'share-dialog';
+    dialog.className = 'share-dialog';
+    document.body.appendChild(dialog);
+  }
+  const text = encodeURIComponent(`${catalog.name} — EVZA Gallery`);
+  const shareUrl = encodeURIComponent(url);
+  dialog.innerHTML = `<div class="share-panel">
+    <button class="icon-btn share-close" data-share-close>×</button>
+    <h2>Partilhar Catálogo</h2>
+    <p class="meta">Escolha onde quer partilhar o link do catálogo.</p>
+    <div class="share-options">
+      <a class="btn share-whatsapp" target="_blank" rel="noopener" href="https://wa.me/?text=${text}%20${shareUrl}">${shareIcon('whatsapp')} WhatsApp</a>
+      <a class="btn share-facebook" target="_blank" rel="noopener" href="https://www.facebook.com/sharer/sharer.php?u=${shareUrl}">${shareIcon('facebook')} Facebook</a>
+      <a class="btn share-x" target="_blank" rel="noopener" href="https://twitter.com/intent/tweet?text=${text}&url=${shareUrl}">${shareIcon('x')} X</a>
+      <a class="btn ghost share-email" href="mailto:?subject=${text}&body=${shareUrl}">${shareIcon('email')} Email</a>
+    </div>
+    <div class="share-actions">
+      <button class="btn" data-copy-catalog-link="${catalog.id}">${shareIcon('copy')} Copiar Link</button>
+      <button class="btn secondary" data-native-share="${catalog.id}">${shareIcon('share')} Partilhar no Telemóvel</button>
+    </div>
+    <p class="meta">Partilhar link é mais leve e funciona melhor no WhatsApp, Facebook e telemóveis.</p>
+  </div>`;
+  dialog.classList.add('open');
+  dialog.addEventListener('click', (e) => {
+    if (e.target === dialog || e.target.closest('[data-share-close]')) dialog.classList.remove('open');
+    const copy = e.target.closest('[data-copy-catalog-link]');
+    if (copy) shareItem('catalog', copy.dataset.copyCatalogLink);
+    const native = e.target.closest('[data-native-share]');
+    if (native) shareItem('catalog', native.dataset.nativeShare);
+  }, { once: true });
+}
+
+function shareIcon(name) {
+  const icons = {
+    whatsapp: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.04 3.5a8.4 8.4 0 0 0-7.18 12.74L3.9 20.5l4.36-.92A8.4 8.4 0 1 0 12.04 3.5Zm0 1.8a6.6 6.6 0 0 1 5.58 10.14 6.6 6.6 0 0 1-8.93 2.28l-.28-.16-2.12.45.47-2.07-.18-.3A6.6 6.6 0 0 1 12.04 5.3Zm-2.6 3.42c-.15 0-.39.06-.6.29-.2.23-.78.76-.78 1.85 0 1.08.8 2.13.9 2.28.1.14 1.55 2.47 3.84 3.36 1.9.75 2.3.6 2.71.56.42-.04 1.35-.55 1.54-1.08.19-.53.19-.99.13-1.08-.06-.1-.21-.15-.45-.27-.24-.12-1.36-.68-1.58-.75-.21-.08-.37-.12-.52.12-.15.23-.6.75-.73.9-.13.16-.27.18-.5.06-.24-.12-1-.37-1.9-1.18-.7-.63-1.18-1.4-1.32-1.64-.14-.24-.01-.37.1-.49.11-.1.24-.27.36-.4.12-.14.16-.24.24-.4.08-.16.04-.3-.02-.42-.06-.12-.53-1.28-.73-1.75-.19-.45-.38-.46-.52-.47h-.46Z"/></svg>',
+    facebook: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13.4 21v-7.7h2.6l.39-3h-2.99V8.4c0-.87.24-1.46 1.49-1.46h1.59V4.26A21.3 21.3 0 0 0 14.16 4c-2.3 0-3.87 1.4-3.87 3.98v2.22H7.7v3h2.6V21h3.1Z"/></svg>',
+    x: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.4 4h4.4l3.43 4.9L16.5 4h3.1l-5.95 6.82L20.1 20h-4.4l-3.78-5.4L7.2 20H4.1l6.4-7.34L4.4 4Zm3.17 1.66 8.95 12.68h.98L8.55 5.66h-.98Z"/></svg>',
+    email: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16a1.8 1.8 0 0 1 1.8 1.8v8.4A1.8 1.8 0 0 1 20 18H4a1.8 1.8 0 0 1-1.8-1.8V7.8A1.8 1.8 0 0 1 4 6Zm0 1.8v.3l8 5 8-5v-.3H4Zm0 2.4v6h16v-6l-8 5-8-5Z"/></svg>',
+    copy: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 7a3 3 0 0 1 3-3h6a3 3 0 0 1 3 3v6a3 3 0 0 1-3 3h-1v1a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3v-6a3 3 0 0 1 3-3h1V7Zm2 1h3a3 3 0 0 1 3 3v3h1a1 1 0 0 0 1-1V7a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v1Zm-3 2a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-6a1 1 0 0 0-1-1H7Z"/></svg>',
+    share: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 16.1c-.76 0-1.44.3-1.95.77L8.91 12.7a3.1 3.1 0 0 0 0-1.4l7.05-4.12A3 3 0 1 0 15 5c0 .24.03.47.08.69L8.02 9.82a3 3 0 1 0 0 4.36l7.11 4.17c-.05.2-.07.42-.07.65A2.94 2.94 0 1 0 18 16.1Z"/></svg>',
+    heart: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7.4-4.43-9.56-9.03C.88 8.64 2.75 5 6.3 5c2.03 0 3.4 1.15 4.2 2.16C11.3 6.15 12.67 5 14.7 5c3.55 0 5.42 3.64 3.86 6.97C16.4 16.57 12 21 12 21Z"/></svg>',
+    comment: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.8C4 4.8 4.8 4 5.8 4h12.4c1 0 1.8.8 1.8 1.8v8.4c0 1-.8 1.8-1.8 1.8H9.1L4 20v-4.2a1.8 1.8 0 0 1-1-1.6V5.8ZM6 6v8h.9L6 16.4 8.5 14H18V6H6Z"/></svg>'
+  };
+  return `<span class="share-icon">${icons[name] || ''}</span>`;
+}
+
+export function trackView(type, id) {
+  if (!cfg.enableViewCount || !supabase || !id) return;
+  const key = `evza-view-${type}-${id}`;
+  if (sessionStorage.getItem(key)) return;
+  sessionStorage.setItem(key, '1');
+  setTimeout(() => supabase.rpc(type === 'catalog' ? 'increment_catalog_views' : 'increment_media_views', { p_id: id }), 5000);
+}
+
+function initRealtime(catalogId) {
+  if (!cfg.enableRealtime || !supabase) return;
+  supabase.channel(`catalog-${catalogId}`)
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'media_items', filter: `catalog_id=eq.${catalogId}` }, (payload) => {
+      state.media.push(payload.new);
+      renderMasonry(state.media);
+      toast('Nova foto adicionada!');
+    })
+    .subscribe();
+}
+
+async function initComments() {
+  const host = $('#comments');
+  if (!host || !state.media.length || !cfg.enableComments) return;
+  const mediaId = state.media[0].id;
+  const comments = await safeQuery(() => supabase.from('comments').select('*').eq('media_id', mediaId).eq('approved', true).order('created_at', { ascending: true }), []);
+  host.innerHTML = `<h2>Comentários</h2><div id="comment-list">${renderCommentTree(comments)}</div><form id="comment-form" class="form-grid"><input class="field" name="author" placeholder="O seu nome" required><textarea class="full" name="body" maxlength="500" rows="4" placeholder="Escreva um comentário" required></textarea><button class="btn" type="submit">Enviar</button></form>`;
+  $('#comment-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = new FormData(e.currentTarget);
+    const { error } = await supabase.from('comments').insert({ media_id: mediaId, author: form.get('author'), body: form.get('body'), approved: !cfg.requireApproval, is_admin: await isAdminSession() });
+    if (error) return toast(error.message);
+    e.currentTarget.reset();
+    toast(cfg.requireApproval ? 'Comentário enviado! Aguarda aprovação.' : 'Comentário publicado.');
+    if (!cfg.requireApproval) initComments();
+  });
+  host.addEventListener('click', async (e) => {
+    const reply = e.target.closest('[data-reply]');
+    const like = e.target.closest('[data-comment-like]');
+    if (reply) showReplyForm(reply.dataset.reply, reply.dataset.author);
+    if (like) toggleCommentLike(like.dataset.commentLike);
+  });
+}
+
+function renderCommentTree(comments = []) {
+  const parents = comments.filter((c) => !c.parent_id);
+  const children = comments.filter((c) => c.parent_id);
+  if (!comments.length) return '<p class="meta">Ainda sem comentários.</p>';
+  return parents.map((comment) => renderComment(comment, children.filter((c) => c.parent_id === comment.id))).join('');
+}
+
+function renderComment(comment, replies = []) {
+  return `<div class="comment ${comment.is_admin ? 'official-comment' : ''}" id="comment-${comment.id}">
+    <strong>${escapeHtml(comment.author)}</strong>${comment.is_admin ? '<span class="official-badge">Administrador EVZA</span>' : ''}
+    <p>${escapeHtml(comment.body)}</p>
+    <div class="comment-actions">
+      <span class="meta">${new Date(comment.created_at).toLocaleDateString('pt-MZ')}</span>
+      <button class="comment-action" data-comment-like="${comment.id}">Gostar · ${fmtNum(comment.likes)}</button>
+      <button class="comment-action" data-reply="${comment.id}" data-author="${escapeHtml(comment.author)}">Responder</button>
+    </div>
+    <div class="reply-host" id="reply-host-${comment.id}"></div>
+    ${replies.length ? `<div class="replies">${replies.map((reply) => renderComment(reply, [])).join('')}</div>` : ''}
+  </div>`;
+}
+
+function showReplyForm(parentId, author = '') {
+  const host = $(`#reply-host-${parentId}`);
+  if (!host) return;
+  host.innerHTML = `<form class="reply-form form-grid" data-reply-form="${parentId}">
+    <input class="field" name="author" placeholder="O seu nome" required>
+    <textarea class="full" name="body" maxlength="500" rows="3" placeholder="Responder a ${escapeHtml(author)}" required></textarea>
+    <button class="btn" type="submit">Responder</button>
+  </form>`;
+  host.querySelector('form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const mediaId = state.media[0]?.id;
+    const form = new FormData(e.currentTarget);
+    const { error } = await supabase.from('comments').insert({ media_id: mediaId, parent_id: parentId, author: form.get('author'), body: form.get('body'), approved: !cfg.requireApproval, is_admin: await isAdminSession() });
+    if (error) return toast(error.message.includes('parent_id') ? 'Execute update-comments-likes.sql no Supabase para activar respostas.' : error.message);
+    toast('Resposta publicada.');
+    initComments();
+  });
+}
+
+async function isAdminSession() {
+  return Boolean(await getSession());
+}
+
+async function toggleCommentLike(commentId) {
+  if (!supabase) return;
+  const existing = await safeQuery(() => supabase.from('comment_likes').select('id').eq('comment_id', commentId).eq('device_id', deviceId()).limit(1), []);
+  if (existing.length) return toast('Já gostou deste comentário neste dispositivo.');
+  const { error } = await supabase.from('comment_likes').insert({ comment_id: commentId, device_id: deviceId() });
+  if (error) return toast(error.message.includes('Could not find') ? 'Execute update-comments-likes.sql no Supabase para activar likes em comentários.' : error.message);
+  toast('Gostou do comentário.');
+  initComments();
+}
+
+async function initSearchPage() {
+  const input = $('#search-input');
+  const params = new URLSearchParams(location.search);
+  input.value = params.get('q') || '';
+  input.focus();
+  const run = debounce(search, 300);
+  input.addEventListener('input', run);
+  $('#clear-search')?.addEventListener('click', () => { input.value = ''; search(); });
+  search();
+}
+
+async function search() {
+  const query = $('#search-input')?.value.trim();
+  const host = $('#search-results');
+  if (!host) return;
+  if (!query) { host.innerHTML = '<div class="empty"><h3>Pesquise fotos, catálogos e eventos.</h3></div>'; return; }
+  host.innerHTML = '<div class="grid"><div class="card skeleton" style="height:180px"></div><div class="card skeleton" style="height:180px"></div></div>';
+  const [catalogs, media] = await Promise.all([
+    safeQuery(() => supabase.from('catalogs').select('*').textSearch('search_vec', query, { type: 'websearch', config: 'portuguese' }), []),
+    safeQuery(() => supabase.from('media_items').select('*, catalogs(name)').textSearch('search_vec', query, { type: 'websearch', config: 'portuguese' }), [])
+  ]);
+  const hi = (s) => escapeHtml(s || '').replace(new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'ig'), '<mark class="highlight">$1</mark>');
+  host.innerHTML = `
+    <h2>Catálogos encontrados</h2><div class="grid">${catalogs.map((c) => `<a class="card" href="catalog.html?id=${c.id}"><div class="media"><img src="${escapeHtml(catalogCover(c))}" onerror="this.src='assets/placeholder.svg'"></div><div style="padding:16px"><h3>${hi(c.name)}</h3><p>${hi(c.description)}</p></div></a>`).join('') || `<p>Nenhum catálogo para "${escapeHtml(query)}".</p>`}</div>
+    <h2 style="margin-top:36px">Fotos encontradas</h2><div class="grid">${media.map((m) => `<a class="card" href="photo.html?id=${m.id}"><img src="${escapeHtml(resolveUrl(m))}" onerror="this.src='assets/placeholder.svg'"><div style="padding:16px"><h3>${hi(m.caption || 'Foto EVZA')}</h3><p>${escapeHtml(m.catalogs?.name || '')}</p></div></a>`).join('') || `<p>Nenhum resultado para "${escapeHtml(query)}". Tente outro termo.</p>`}</div>`;
+}
+
+async function initPhotoPage() {
+  const id = new URLSearchParams(location.search).get('id');
+  const [photo] = await safeQuery(() => supabase.from('media_items').select('*, catalogs(*)').eq('id', id).limit(1), []);
+  const host = $('#photo-content');
+  if (!photo) { host.innerHTML = '<div class="empty"><h2>Foto não encontrada</h2></div>'; return; }
+  const src = resolveUrl(photo);
+  updateMeta(`${photo.caption || 'Foto'} — EVZA Gallery`, `Foto do catálogo ${photo.catalogs?.name || 'EVZA'} — EVZA, Tete`, src);
+  trackView('media', id);
+  host.innerHTML = `<section class="catalog-hero"><div class="wrap"><a href="catalog.html?id=${photo.catalog_id}" class="btn ghost">← Ver Catálogo Completo</a><h1>${escapeHtml(photo.caption || 'Momento EVZA')}</h1><p>${escapeHtml(photo.catalogs?.name || '')}</p></div></section><section class="section"><div class="wrap"><img class="card" src="${escapeHtml(src)}" alt="${escapeHtml(photo.caption || 'Foto EVZA')}" onerror="this.src='assets/placeholder.svg'"><div class="stat-row"><button class="btn" data-share="photo" data-id="${photo.id}">Partilhar</button><a class="btn secondary" href="${escapeHtml(src)}" download>Descarregar</a></div></div></section>`;
+}
+
+function updateMeta(title, description, image) {
+  document.title = title;
+  const set = (sel, attr, val) => { const el = $(sel); if (el) el.setAttribute(attr, val); };
+  set('meta[property="og:title"]', 'content', title);
+  set('meta[property="og:description"]', 'content', description);
+  set('meta[property="og:image"]', 'content', image);
+  set('meta[property="og:url"]', 'content', location.href);
+}
+
+async function initAdmin() {
+  const session = await getSession();
+  state.adminAuthed = Boolean(session);
+  renderAdmin(Boolean(session));
+  onAuthChange((s) => {
+    const authed = Boolean(s);
+    if (state.adminAuthed === authed && $('#admin-main')) return;
+    state.adminAuthed = authed;
+    renderAdmin(authed);
+  });
+}
+
+function renderAdmin(isAuthed) {
+  const root = $('#admin-root');
+  if (!root) return;
+  if (!isAuthed) {
+    root.innerHTML = `<section class="login-view"><form class="login-card stack" id="login-form"><img src="assets/logo.svg" alt="EVZA"><h1>Área do Administrador</h1><input class="field" name="email" type="email" placeholder="Email" required><input class="field" name="password" type="password" placeholder="Palavra-passe" required><button class="btn" type="submit">Entrar</button><p class="meta" id="login-error"></p></form></section>`;
+    $('#login-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const f = new FormData(e.currentTarget);
+      const { error } = await signIn(f.get('email'), f.get('password'));
+      if (error) $('#login-error').textContent = error.message;
+    });
+    return;
+  }
+  const adminTabs = ['Dashboard','Catálogos','Adicionar Media','Estados','Comentários','Configurações'];
+  let activeTab = Number(localStorage.getItem('evza-admin-tab') || 0);
+  if (!Number.isFinite(activeTab) || activeTab < 0 || activeTab >= adminTabs.length) activeTab = 0;
+  root.innerHTML = `<div class="admin-shell"><aside class="admin-sidebar"><div class="brand"><img src="assets/logo.svg"><span>Admin EVZA</span></div><nav class="admin-nav">${adminTabs.map((x,i)=>`<button class="btn ${i===activeTab?'active':''}" data-admin="${i}">${x}</button>`).join('')}</nav><div style="margin-top:auto"><button class="btn ghost" id="logout">Sair</button></div></aside><main class="admin-main" id="admin-main"></main></div>`;
+  $('#logout').addEventListener('click', signOut);
+  $('.admin-nav').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-admin]');
+    if (!btn) return;
+    $$('.admin-nav button').forEach((b) => b.classList.remove('active'));
+    btn.classList.add('active');
+    localStorage.setItem('evza-admin-tab', btn.dataset.admin);
+    paintAdmin(Number(btn.dataset.admin));
+  });
+  paintAdmin(activeTab);
+}
+
+async function paintAdmin(tab) {
+  const main = $('#admin-main');
+  const cats = await loadCatalogs();
+  if (tab === 0) {
+    const media = await safeQuery(() => supabase.from('media_items').select('*'), []);
+    const pending = await safeQuery(() => supabase.from('comments').select('*').eq('approved', false), []);
+    main.innerHTML = `<h1>Dashboard</h1><div class="metric-grid"><div class="metric"><span>Catálogos</span><strong>${cats.length}</strong></div><div class="metric"><span>Media</span><strong>${media.length}</strong></div><div class="metric"><span>Visualizações</span><strong>${fmtNum(cats.reduce((a,c)=>a+(c.views||0),0)+media.reduce((a,m)=>a+(m.views||0),0))}</strong></div><div class="metric"><span>Pendentes</span><strong>${pending.length}</strong></div></div>${table('Catálogos mais vistos', cats.sort((a,b)=>(b.views||0)-(a.views||0)).slice(0,5).map(c=>[c.name, fmtNum(c.views)]))}`;
+  }
+  if (tab === 1) adminCatalogs(main, cats);
+  if (tab === 2) adminMedia(main, cats);
+  if (tab === 3) adminStatuses(main);
+  if (tab === 4) adminComments(main);
+  if (tab === 5) adminSettings(main);
+}
+
+function table(title, rows) {
+  return `<h2 style="margin-top:28px">${title}</h2><table class="table"><tbody>${rows.map((r) => `<tr>${r.map((c) => `<td>${escapeHtml(c)}</td>`).join('')}</tr>`).join('') || '<tr><td>Sem dados.</td></tr>'}</tbody></table>`;
+}
+
+function adminCatalogs(main, cats) {
+  main.innerHTML = `<h1>Gerir Catálogos</h1><button class="btn" id="new-cat">Novo Catálogo</button><div id="cat-form"></div><div class="stack" style="margin-top:20px">${cats.map((c)=>`<div class="card" style="padding:16px" data-catalog-card="${c.id}"><div class="upload-row"><img src="${escapeHtml(catalogCover(c))}" alt="" onerror="this.src='assets/placeholder.svg'"><div><h3>${escapeHtml(c.name)}</h3><p class="meta">${fmtDate(c.event_date)} · ${fmtNum(c.views)} visualizações</p><div class="stat-row"><a class="btn secondary" href="catalog.html?id=${c.id}">Ver no Site</a><button class="btn" data-edit-cat="${c.id}">Editar</button><button class="btn" data-manage-media="${c.id}">Gerir Media</button><button class="btn" data-feature="${c.id}">${c.is_featured?'Remover Destaque':'Em Destaque'}</button><button class="btn secondary" data-fix-cover="${c.id}">Usar 1ª foto como capa</button><button class="btn danger" data-delete-cat="${c.id}">Eliminar Catálogo</button></div></div></div><div class="catalog-admin-panel" id="catalog-panel-${c.id}"></div></div>`).join('')}</div>`;
+  $('#new-cat').addEventListener('click', () => $('#cat-form').innerHTML = `<form id="create-cat" class="comment-box form-grid"><input class="field" name="name" placeholder="Nome do catálogo" required><input class="field" name="event_date" type="date"><textarea class="full" name="description" placeholder="Descrição"></textarea><label class="full">Foto de capa<input class="field" name="cover_file" type="file" accept=".jpg,.jpeg,.png,.webp"></label><input class="field full" name="cover_url" placeholder="Ou cole URL da capa / Google Drive"><img class="card full" id="cover-preview" src="assets/placeholder.svg" alt="Pré-visualização da capa" style="max-height:220px;object-fit:cover;width:100%"><label><input name="is_featured" type="checkbox"> Marcar como Destaque</label><button class="btn" type="submit">Criar Catálogo</button></form>`);
+  main.addEventListener('submit', async (e) => {
+    if (e.target.id !== 'create-cat') return;
+    e.preventDefault();
+    const f = new FormData(e.target);
+    const button = e.target.querySelector('button[type="submit"]');
+    button.disabled = true;
+    button.textContent = 'A guardar...';
+    const coverFile = f.get('cover_file');
+    const coverUrl = coverFile && coverFile.size ? await uploadPublicFile(coverFile, `catalog-covers/${Date.now()}-${safeFileName(coverFile.name)}`) : normalisePublicUrl(f.get('cover_url'));
+    const { error } = await supabase.from('catalogs').insert({ name: f.get('name'), description: f.get('description'), event_date: f.get('event_date') || null, cover_url: coverUrl || 'assets/placeholder.svg', is_featured: f.has('is_featured'), created_by: (await getUser())?.id });
+    button.disabled = false;
+    button.textContent = 'Criar Catálogo';
+    if (error) toast(error.message); else { toast('Catálogo criado.'); paintAdmin(1); }
+  });
+  main.addEventListener('submit', async (e) => {
+    if (!e.target.matches('[data-edit-form]')) return;
+    e.preventDefault();
+    const catalogId = e.target.dataset.editForm;
+    const f = new FormData(e.target);
+    const coverFile = f.get('cover_file');
+    const coverUrl = coverFile && coverFile.size ? await uploadPublicFile(coverFile, `catalog-covers/${Date.now()}-${safeFileName(coverFile.name)}`) : normalisePublicUrl(f.get('cover_url'));
+    const payload = {
+      name: f.get('name'),
+      description: f.get('description'),
+      event_date: f.get('event_date') || null,
+      is_featured: f.has('is_featured')
+    };
+    if (coverUrl) payload.cover_url = coverUrl;
+    const { error } = await supabase.from('catalogs').update(payload).eq('id', catalogId);
+    if (error) toast(error.message); else { toast('Catálogo actualizado.'); paintAdmin(1); }
+  });
+  main.addEventListener('change', (e) => {
+    if (e.target.name === 'cover_file' && e.target.files?.[0]) $('#cover-preview').src = URL.createObjectURL(e.target.files[0]);
+    if (e.target.name === 'cover_url') $('#cover-preview').src = normalisePublicUrl(e.target.value) || 'assets/placeholder.svg';
+  });
+  main.addEventListener('click', async (e) => {
+    const del = e.target.closest('[data-delete-cat]');
+    const feat = e.target.closest('[data-feature]');
+    const cover = e.target.closest('[data-fix-cover]');
+    const edit = e.target.closest('[data-edit-cat]');
+    const media = e.target.closest('[data-manage-media]');
+    const deleteMedia = e.target.closest('[data-delete-media]');
+    if (del && confirm('Eliminar este catálogo?')) { await supabase.from('catalogs').delete().eq('id', del.dataset.deleteCat); paintAdmin(1); }
+    if (feat) { const c = cats.find((x) => x.id === feat.dataset.feature); await supabase.from('catalogs').update({ is_featured: !c.is_featured }).eq('id', c.id); paintAdmin(1); }
+    if (cover) { await fixCatalogCover(cover.dataset.fixCover); paintAdmin(1); }
+    if (edit) renderCatalogEditForm(edit.dataset.editCat, cats.find((c) => c.id === edit.dataset.editCat));
+    if (media) renderCatalogMediaPanel(media.dataset.manageMedia);
+    if (deleteMedia) deleteMediaItem(deleteMedia.dataset.deleteMedia, deleteMedia.dataset.storagePath || '', deleteMedia.dataset.catalogId);
+  });
+}
+
+function renderCatalogEditForm(catalogId, cat) {
+  const panel = $(`#catalog-panel-${catalogId}`);
+  if (!panel || !cat) return;
+  panel.innerHTML = `<form class="comment-box form-grid" data-edit-form="${catalogId}">
+    <h3 class="full">Editar Catálogo</h3>
+    <input class="field" name="name" value="${escapeHtml(cat.name)}" placeholder="Nome do catálogo" required>
+    <input class="field" name="event_date" type="date" value="${escapeHtml(cat.event_date || '')}">
+    <textarea class="full" name="description" rows="3" placeholder="Descrição">${escapeHtml(cat.description || '')}</textarea>
+    <label class="full">Nova foto de capa<input class="field" name="cover_file" type="file" accept=".jpg,.jpeg,.png,.webp"></label>
+    <input class="field full" name="cover_url" value="${escapeHtml(cat.cover_url || '')}" placeholder="URL da capa / Google Drive">
+    <label><input name="is_featured" type="checkbox" ${cat.is_featured ? 'checked' : ''}> Marcar como Destaque</label>
+    <button class="btn" type="submit">Guardar Alterações</button>
+  </form>`;
+}
+
+async function renderCatalogMediaPanel(catalogId) {
+  const panel = $(`#catalog-panel-${catalogId}`);
+  if (!panel) return;
+  panel.innerHTML = '<div class="comment-box"><h3>Media do Catálogo</h3><p class="meta">A carregar...</p></div>';
+  const items = await safeQuery(() => supabase.from('media_items').select('*').eq('catalog_id', catalogId).order('created_at', { ascending: false }), []);
+  panel.innerHTML = `<div class="comment-box"><h3>Media do Catálogo</h3>${items.length ? `<div class="media-admin-grid">${items.map((item) => `<div class="media-admin-item"><div>${item.type === 'video' ? `<div class="video-tile"${videoTileStyle(item)}><span class="play-mark">▶</span></div>` : `<img src="${escapeHtml(resolveUrl(item) || 'assets/placeholder.svg')}" onerror="this.src='assets/placeholder.svg'" alt="">`}</div><div><strong>${escapeHtml(item.caption || (item.type === 'video' ? 'Vídeo' : 'Foto'))}</strong><p class="meta">${item.type === 'video' ? 'Vídeo' : 'Foto'} · ${new Date(item.created_at).toLocaleDateString('pt-MZ')}</p><button class="btn danger" data-delete-media="${item.id}" data-storage-path="${escapeHtml(item.storage_path || '')}" data-catalog-id="${catalogId}">Eliminar Media</button></div></div>`).join('')}</div>` : '<p class="meta">Este catálogo ainda não tem fotos ou vídeos.</p>'}</div>`;
+}
+
+async function deleteMediaItem(mediaId, storagePath, catalogId) {
+  if (!confirm('Eliminar esta foto/vídeo do catálogo? Esta acção não pode ser desfeita.')) return;
+  if (storagePath) await supabase.storage.from(cfg.bucket).remove([storagePath]);
+  const { error } = await supabase.from('media_items').delete().eq('id', mediaId);
+  if (error) return toast(error.message);
+  toast('Media eliminada.');
+  renderCatalogMediaPanel(catalogId);
+}
+
+function adminMedia(main, cats) {
+  main.innerHTML = `<h1>Adicionar Media</h1><div class="tabs"><button class="filter active" data-mode="upload">Upload directo</button><button class="filter" data-mode="drive">Google Drive</button></div><select id="media-cat">${cats.map((c)=>`<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('')}</select><div id="upload" class="tab-panel active"><label class="drop-zone"><input id="file-input" type="file" multiple accept=".jpg,.jpeg,.png,.webp,.mp4,.mov" hidden><strong>Arrastar fotos/vídeos aqui ou clicar para seleccionar</strong></label><div id="uploads"></div></div><div id="drive" class="tab-panel"><form id="drive-form" class="comment-box form-grid"><input class="field full" name="url" placeholder="URL Google Drive" required><input class="field" name="caption" placeholder="Legenda"><select name="type"><option value="photo">Foto</option><option value="video">Vídeo</option></select><input class="field full" name="poster_url" placeholder="URL do poster para vídeo"><button class="btn" type="submit">Guardar Link</button></form></div>`;
+  $$('.tabs button').forEach((b)=>b.addEventListener('click',()=>{$$('.tabs button').forEach(x=>x.classList.remove('active')); b.classList.add('active'); $$('.tab-panel').forEach(p=>p.classList.remove('active')); $(`#${b.dataset.mode}`).classList.add('active');}));
+  $('.drop-zone').addEventListener('click', () => $('#file-input').click());
+  $('#file-input').addEventListener('change', uploadFiles);
+  $('#drive-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const f = new FormData(e.target);
+    const id = extractDriveId(f.get('url'));
+    const posterUrl = f.get('poster_url') || (f.get('type') === 'video' && id ? driveThumbUrl(id, 2000) : '');
+    const srcUrl = id ? (f.get('type') === 'video' ? `https://drive.google.com/uc?export=view&id=${id}` : driveThumbUrl(id, 2000)) : f.get('url');
+    const { error } = await supabase.from('media_items').insert({ catalog_id: $('#media-cat').value, type: f.get('type'), src_url: srcUrl, drive_file_id: id, caption: f.get('caption'), poster_url: posterUrl });
+    if (error) toast(error.message); else { e.target.reset(); toast('Media adicionada. Abra o catálogo para ver.'); }
+  });
+}
+
+async function uploadFiles(e) {
+  const files = [...e.target.files];
+  const host = $('#uploads');
+  for (const file of files) {
+    const row = document.createElement('div');
+    row.className = 'upload-row';
+    const preview = URL.createObjectURL(file);
+    row.innerHTML = `${file.type.startsWith('video') ? `<video class="upload-preview" src="${preview}" muted></video>` : `<img class="upload-preview" src="${preview}" alt="Preview">`}<div><input class="field" placeholder="Legenda"><div class="bar"><span></span></div><p class="meta">A fazer upload...</p></div>`;
+    host.appendChild(row);
+    const path = `${$('#media-cat').value}/${Date.now()}-${safeFileName(file.name)}`;
+    const publicUrl = await uploadPublicFile(file, path).catch((error) => {
+      row.querySelector('.meta').textContent = error.message;
+      return '';
+    });
+    if (!publicUrl) continue;
+    row.querySelector('.bar span').style.width = '100%';
+    const { error } = await supabase.from('media_items').insert({ catalog_id: $('#media-cat').value, type: file.type.startsWith('video') ? 'video' : 'photo', src_url: publicUrl, storage_path: path, caption: row.querySelector('input').value });
+    if (error) {
+      row.querySelector('.meta').textContent = `Erro ao guardar na galeria: ${error.message}`;
+      row.querySelector('.meta').style.color = '#9a231c';
+    } else {
+      row.querySelector('.meta').textContent = 'Concluído ✓. Abra o catálogo para ver.';
+      await ensureCatalogHasCover($('#media-cat').value, publicUrl, file.type);
+    }
+  }
+}
+
+async function ensureCatalogHasCover(catalogId, publicUrl, fileType) {
+  if (!publicUrl || fileType.startsWith('video')) return;
+  const [cat] = await safeQuery(() => supabase.from('catalogs').select('cover_url').eq('id', catalogId).limit(1), []);
+  if (!cat || (cat.cover_url && !cat.cover_url.includes('placeholder.svg'))) return;
+  await supabase.from('catalogs').update({ cover_url: publicUrl }).eq('id', catalogId);
+}
+
+async function fixCatalogCover(catalogId) {
+  const [item] = await safeQuery(() => supabase.from('media_items').select('*').eq('catalog_id', catalogId).eq('type', 'photo').order('created_at').limit(1), []);
+  if (!item) return toast('Este catálogo ainda não tem fotos para usar como capa.');
+  const url = resolveUrl(item);
+  const { error } = await supabase.from('catalogs').update({ cover_url: url }).eq('id', catalogId);
+  toast(error ? error.message : 'Capa actualizada com a primeira foto.');
+}
+
+async function adminStatuses(main) {
+  const statuses = await safeQuery(() => supabase.from('status_items').select('*').order('created_at', { ascending: false }), []);
+  main.innerHTML = `<h1>Estados EVZA</h1>
+    <p class="meta">Adicione fotos ou vídeos verticais semelhantes aos estados/reels e escolha por quanto tempo ficam disponíveis na página inicial.</p>
+    <form id="status-form" class="comment-box form-grid">
+      <input class="field" name="caption" placeholder="Legenda curta">
+      <select name="duration" class="field">
+        <option value="6">6 horas</option>
+        <option value="12">12 horas</option>
+        <option value="24" selected>24 horas</option>
+        <option value="48">48 horas</option>
+        <option value="168">7 dias</option>
+      </select>
+      <label class="full">Foto ou vídeo vertical<input class="field" name="file" type="file" accept=".jpg,.jpeg,.png,.webp,.mp4,.mov"></label>
+      <input class="field full" name="url" placeholder="Ou cole URL Google Drive">
+      <select name="type" class="field"><option value="photo">Foto</option><option value="video">Vídeo</option></select>
+      <input class="field" name="poster_url" placeholder="Poster do vídeo (opcional)">
+      <button class="btn" type="submit">Publicar Estado</button>
+    </form>
+    <div class="media-admin-grid">${statuses.map((item) => `<div class="media-admin-item"><div>${item.type === 'video' ? `<div class="video-tile"${videoTileStyle(item)}><span class="play-mark">▶</span></div>` : `<img src="${escapeHtml(resolveUrl(item))}" onerror="this.src='assets/placeholder.svg'" alt="">`}</div><div><strong>${escapeHtml(item.caption || 'Estado EVZA')}</strong><p class="meta">Expira: ${new Date(item.expires_at).toLocaleString('pt-MZ')}</p><button class="btn danger" data-delete-status="${item.id}" data-storage-path="${escapeHtml(item.storage_path || '')}">Eliminar Estado</button></div></div>`).join('') || '<p class="meta">Ainda não há estados publicados.</p>'}</div>`;
+
+  $('#status-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const f = new FormData(e.currentTarget);
+    const file = f.get('file');
+    const driveId = extractDriveId(f.get('url'));
+    const type = file && file.size ? (file.type.startsWith('video') ? 'video' : 'photo') : f.get('type');
+    const expiresAt = new Date(Date.now() + Number(f.get('duration')) * 60 * 60 * 1000).toISOString();
+    let storagePath = '';
+    let srcUrl = driveId ? (type === 'video' ? `https://drive.google.com/uc?export=view&id=${driveId}` : driveThumbUrl(driveId, 2000)) : normalisePublicUrl(f.get('url'));
+
+    if (file && file.size) {
+      storagePath = `status/${Date.now()}-${safeFileName(file.name)}`;
+      srcUrl = await uploadPublicFile(file, storagePath);
     }
 
-    var msg = data.message || "Novo conteúdo disponível!";
-    if (catalogName && catalogName !== data.message) {
-      msg = "Novo catálogo: " + catalogName;
-    }
+    if (!srcUrl) return toast('Escolha um ficheiro ou cole um link.');
+    const posterUrl = f.get('poster_url') || (type === 'video' && driveId ? driveThumbUrl(driveId, 2000) : '');
+    const { error } = await supabase.from('status_items').insert({ type, src_url: srcUrl, storage_path: storagePath || null, drive_file_id: driveId || null, poster_url: posterUrl, caption: f.get('caption'), expires_at: expiresAt, created_by: (await getUser())?.id });
+    if (error) return toast(error.message.includes('status_items') ? 'Execute update-statuses.sql no Supabase para activar Estados.' : error.message);
+    toast('Estado publicado.');
+    paintAdmin(3);
+  });
 
-    var banner = document.createElement("div");
-    banner.id = "update-banner";
-    banner.className = "update-banner";
-    banner.innerHTML =
-      '<div class="update-banner-inner">' +
-        '<div class="update-banner-icon">' +
-          '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>' +
-        '</div>' +
-        '<div class="update-banner-text">' +
-          '<h4>' + msg + '</h4>' +
-          '</div>' +
-        '<button class="update-banner-close" aria-label="Fechar">&times;</button>' +
-      '</div>' +
-      '<div class="update-banner-date">📅 ' + (data.date || "Verificar atualizações") + '</div>';
+  main.addEventListener('click', async (e) => {
+    const del = e.target.closest('[data-delete-status]');
+    if (!del) return;
+    if (!confirm('Eliminar este estado?')) return;
+    if (del.dataset.storagePath) await supabase.storage.from(cfg.bucket).remove([del.dataset.storagePath]);
+    const { error } = await supabase.from('status_items').delete().eq('id', del.dataset.deleteStatus);
+    if (error) toast(error.message); else { toast('Estado eliminado.'); paintAdmin(3); }
+  }, { once: true });
+}
 
-    document.body.appendChild(banner);
+function safeFileName(name = 'ficheiro') {
+  return String(name).normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9.]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase();
+}
 
-    banner.querySelector(".update-banner-close").addEventListener("click", function () {
-      banner.classList.remove("visible");
-      setTimeout(function () { banner.remove(); }, 400);
-      /* Mark this version as seen */
-      fetch("version.json", { cache: "no-cache" })
-        .then(function (res) { return res.json(); })
-        .then(function (d) {
-          localStorage.setItem("evza_last_seen_version", JSON.stringify(d));
-        })
-        .catch(function () {});
-    });
+async function uploadPublicFile(file, path) {
+  const { error } = await supabase.storage.from(cfg.bucket).upload(path, file, {
+    upsert: true,
+    contentType: file.type || 'application/octet-stream'
+  });
+  if (error) throw error;
+  return storageUrl(path);
+}
 
-    /* Auto-show after a tick */
-    setTimeout(function () {
-      banner.classList.add("visible");
-    }, 100);
+async function adminComments(main) {
+  const comments = await safeQuery(() => supabase.from('comments').select('*, media_items(src_url,caption)').order('created_at', { ascending: false }), []);
+  main.innerHTML = `<h1>Comentários</h1><div class="stack">${comments.map((c)=>`<div class="card" style="padding:16px"><strong>${escapeHtml(c.author)}</strong><p>${escapeHtml(c.body)}</p><p class="meta">${c.approved ? 'Aprovado' : 'Aguarda aprovação'}</p><div class="stat-row"><button class="btn" data-approve="${c.id}">Aprovar</button><button class="btn danger" data-reject="${c.id}">Rejeitar</button></div></div>`).join('') || '<p>Sem comentários.</p>'}</div>`;
+  main.addEventListener('click', async (e) => {
+    const ap = e.target.closest('[data-approve]');
+    const re = e.target.closest('[data-reject]');
+    if (ap) await supabase.from('comments').update({ approved: true }).eq('id', ap.dataset.approve);
+    if (re) await supabase.from('comments').delete().eq('id', re.dataset.reject);
+    if (ap || re) adminComments(main);
+  });
+}
 
-    /* Auto-hide after 15s */
-    setTimeout(function () {
-      if (banner.parentElement) {
-        banner.classList.remove("visible");
-        setTimeout(function () { banner.remove(); }, 400);
-      }
-    }, 15000);
+function adminSettings(main) {
+  main.innerHTML = `<h1>Configurações</h1><form id="settings" class="comment-box stack"><input class="field" name="siteUrl" value="${escapeHtml(localStorage.getItem('evza-site-url') || cfg.siteUrl)}"><label><input type="checkbox" checked> Permitir comentários</label><label><input type="checkbox" checked> Permitir download de fotos</label><label><input type="checkbox" checked> Mostrar contador de visualizações</label><button class="btn">Guardar Configurações</button><p class="meta">Versão 2 · último deploy: ${new Date().toLocaleDateString('pt-MZ')}</p></form>`;
+  $('#settings').addEventListener('submit', (e) => { e.preventDefault(); localStorage.setItem('evza-site-url', new FormData(e.target).get('siteUrl')); toast('Configurações guardadas.'); });
+}
+
+function debounce(fn, wait) {
+  let t;
+  return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), wait); };
+}
+
+function registerServiceWorker() {
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(console.warn);
+}
+
+async function initOffline() {
+  $('#retry')?.addEventListener('click', () => location.reload());
+  if ('caches' in window) {
+    const cache = await caches.open('evza-v2');
+    const keys = await cache.keys();
+    $('#cached-list').innerHTML = keys.filter((r) => r.url.includes('catalog.html')).map((r) => `<li>${escapeHtml(r.url)}</li>`).join('') || '<li>Nenhum catálogo em cache ainda.</li>';
   }
-
-  document.addEventListener("DOMContentLoaded", init);
-  document.addEventListener("DOMContentLoaded", initUpdateNotification);
-})();
+}

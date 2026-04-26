@@ -1,106 +1,76 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="pt-MZ">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>EVZA Gallery — Escola Primária e Secundária Vale do Zambeze</title>
-  <meta name="description" content="Galeria de fotos e vídeos da Escola Vale do Zambeze (EVZA) — Tete, Moçambique. Momentos que ficam para sempre." />
-  <meta name="theme-color" content="#8B3A1E" />
-
-  <!-- Open Graph (WhatsApp, Facebook, etc.) -->
-  <meta property="og:title" content="EVZA Gallery — Escola Vale do Zambeze" />
-  <meta property="og:description" content="Galeria de fotos e vídeos da EVZA — Tete, Moçambique. Momentos que ficam para sempre." />
-  <meta property="og:type" content="website" />
-  <meta property="og:image" content="assets/logo.jpg" />
-
-  <link rel="icon" type="image/svg+xml" href="assets/logo.jpg" />
-
-  <!-- Google Fonts -->
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,300;0,400;0,700;1,400&family=Playfair+Display:ital,wght@0,700;1,700&display=swap" />
-
-  <link rel="stylesheet" href="style.css" />
-  <link rel="manifest" href="manifest.json" />
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>EVZA Gallery — Escola Vale do Zambeze</title>
+  <meta name="description" content="Galeria fotográfica da Escola Primária e Secundária Vale do Zambeze, Tete, Moçambique.">
+  <meta property="og:title" content="EVZA Gallery">
+  <meta property="og:description" content="Memórias vivas da Escola Vale do Zambeze.">
+  <meta property="og:image" content="assets/logo.svg">
+  <meta property="og:url" content="">
+  <meta property="og:type" content="website">
+  <link rel="canonical" href="">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="assets/logo.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700;900&family=Playfair+Display:wght@700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
 </head>
-<body>
-
-  <!-- NAVBAR -->
-  <nav class="navbar" id="navbar">
-    <div class="container navbar-inner">
-      <a href="index.html" class="navbar-brand">
-        <img src="assets/logo.jpg" alt="EVZA Logo" />
-        EVZA Gallery
-      </a>
-      <button class="navbar-menu-btn" id="nav-menu-btn" aria-label="Menu">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-          <line x1="3" y1="6" x2="21" y2="6"/>
-          <line x1="3" y1="12" x2="21" y2="12"/>
-          <line x1="3" y1="18" x2="21" y2="18"/>
-        </svg>
-      </button>
-      <ul class="navbar-links" id="nav-links">
-        <li><a href="index.html">Início</a></li>
-        <li><a href="admin.html">Administrador</a></li>
-      </ul>
+<body class="page" data-page="home">
+  <header class="site-header overlay">
+    <div class="wrap header-inner">
+      <a class="brand" href="index.html"><img src="assets/logo.svg" alt="EVZA"><span>EVZA Gallery</span></a>
+      <nav class="nav" aria-label="Navegação principal">
+        <a href="#catalogos">Galeria</a><a href="search.html">Pesquisar</a>
+        <button class="icon-btn" data-dark-toggle aria-label="Alternar modo escuro">☾</button>
+        <a href="admin.html" aria-label="Administração">Admin</a>
+      </nav>
     </div>
-  </nav>
-
+  </header>
   <main>
-    <!-- HERO -->
     <section class="hero">
-      <div class="hero-bg"></div>
+      <aside class="hero-status" id="hero-status" aria-label="Estados EVZA"></aside>
       <div class="hero-content">
-        <img class="hero-logo" src="assets/logo.jpg" alt="EVZA Logo" />
+        <img class="hero-logo" src="assets/logo.svg" alt="EVZA">
         <h1>EVZA Gallery</h1>
-        <p>Momentos que Ficam para Sempre</p>
-        <p class="hero-location">Escola Vale do Zambeze &mdash; Tete, Moçambique</p>
+        <p>Escola Primária e Secundária Vale do Zambeze</p>
+        <p><em>Momentos que Ficam para Sempre · Tete, Moçambique</em></p>
+        <div class="hero-actions">
+          <a class="btn" href="#catalogos">Ver Catálogos</a>
+          <a class="btn ghost" href="search.html">Pesquisar Fotos</a>
+        </div>
+      </div>
+      <a class="hero-arrow" href="#catalogos" aria-label="Descer">↓</a>
+    </section>
+    <div class="wrap quick-search">
+      <label class="search-box">⌕ <input data-search-go placeholder="Pesquisar catálogos, eventos, momentos..."></label>
+    </div>
+    <section class="section" id="featured-section" hidden>
+      <div class="wrap">
+        <div class="section-title"><h2>Em Destaque <span class="badge">★</span></h2><span class="line"></span></div>
+        <div class="grid featured" id="featured-grid"></div>
       </div>
     </section>
-
-    <!-- CATALOG GRID -->
-    <section class="container">
-      <div class="section-header">
-        <h2>Catálogos</h2>
-        <p>Explore as memórias registadas ao longo do ano — fotos e vídeos dos alunos e professores.</p>
-        <span class="divider"></span>
+    <section class="section" id="catalogos">
+      <div class="wrap">
+        <div class="section-title"><h2>Nossos Catálogos</h2><span class="line"></span></div>
+        <div class="filters" id="year-filters"></div>
+        <div class="grid" id="catalog-grid"><div class="card skeleton" style="height:260px"></div><div class="card skeleton" style="height:260px"></div><div class="card skeleton" style="height:260px"></div></div>
       </div>
-      <div class="catalogs-grid" id="catalogs-grid"></div>
     </section>
   </main>
-
-  <!-- LIGHTBOX -->
-  <div class="lightbox" id="lightbox" aria-hidden="true">
-    <div class="lightbox-content" id="lightbox-content">
-      <button class="lightbox-close" id="lightbox-close" aria-label="Fechar">&times;</button>
-      <button class="lightbox-nav lightbox-prev" id="lightbox-prev" aria-label="Anterior">&#8249;</button>
-      <button class="lightbox-nav lightbox-next" id="lightbox-next" aria-label="Próximo">&#8250;</button>
-      <span class="lightbox-caption" id="lightbox-caption"></span>
-      <span class="lightbox-counter" id="lightbox-counter"></span>
-    </div>
-  </div>
-
-  <!-- FOOTER -->
-  <footer class="footer">
-    <div class="container footer-inner">
-      <img src="assets/logo.jpg" alt="EVZA Logo" />
-      <h3>Escola Primária e Secundária Vale do Zambeze</h3>
-      <p>Tete — Moçambique</p>
-      <p class="footer-copy">&copy; <span id="footer-year"></span> EVZA Gallery</p>
+  <footer class="site-footer">
+    <div class="wrap footer-grid">
+      <div><div class="brand"><img src="assets/logo.svg" alt="EVZA"><span>Escola Vale do Zambeze</span></div><p>Tete, Moçambique · Educação que Transforma</p></div>
+      <div><h3>Links rápidos</h3><p><a href="#catalogos">Galeria</a></p><p><a href="search.html">Pesquisar</a></p><p><a href="admin.html">Admin</a></p></div>
+      <div><h3>Contacto</h3><p>evzambeze@gmail.com</p></div>
+      <div class="footer-bottom">© <span id="year">2026</span> EVZA Gallery · Feito com amor para os alunos da EVZA</div>
     </div>
   </footer>
-  <script>document.getElementById('footer-year').textContent = new Date().getFullYear();</script>
-
-  <!-- SCRIPTS -->
-  <script src="data.js"></script>
-  <script src="app.js"></script>
-  <script src="download-share.js"></script>
-  <script>
-    if ("serviceWorker" in navigator) {
-      window.addEventListener("load", function () {
-        navigator.serviceWorker.register("sw.js").catch(function () {});
-      });
-    }
-  </script>
+  <script src="config.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script type="module" src="app.js"></script>
 </body>
 </html>

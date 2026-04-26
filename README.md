@@ -1,179 +1,99 @@
-# EVZA Gallery
+# EVZA Gallery v2
 
-**Escola Primária e Secundária Vale do Zambeze** — Galeria de Fotos e Vídeos
+Galeria fotográfica estática para a Escola Primária e Secundária Vale do Zambeze, em Tete, Moçambique. O site usa HTML, CSS e JavaScript vanilla, Supabase para dados/autenticação/storage, Google Drive como fallback de media e GitHub Pages para publicação gratuita.
 
-> 📍 Tete — Moçambique
+## 1. Criar Supabase
 
-Uma galeria de fotografias moderna, responsiva e gratuita, alojada no GitHub Pages. Todas as imagens e vídeos são armazenados gratuitamente no Google Drive.
+1. Aceda a [supabase.com](https://supabase.com) e crie uma conta.
+2. Crie um projecto novo.
+3. Guarde a palavra-passe da base de dados num local seguro.
+4. Aguarde até o projecto ficar activo.
 
----
+## 2. Executar o schema
 
-## Funcionalidades
+1. No Supabase, abra **SQL Editor**.
+2. Crie uma nova query.
+3. Cole o conteúdo de `schema.sql`.
+4. Clique em **Run**.
+5. Se as políticas do Storage falharem por já existirem, execute novamente; o ficheiro remove e recria as políticas esperadas.
 
-- 🖼️ **Grid de catálogos** com capa fotográfica, título e contagem de ficheiros
-- 📸 **Galeria masonry** com animações suaves ao scroll
-- 🔍 **Lightbox** com navegação por setas e suporte a legendas
-- 📱 **Design responsivo** — funciona em telemóvel, tablet e computador
-- 🎨 **Estilo editorial** com tons terrosos africanos
-- 🔒 **Painel de administração** protegido por palavra-passe
-- 💾 **PWA ready** — funciona offline após primeiro carregamento
-- 🚀 **100% gratuito** — sem custos de alojamento
+## 3. Storage
 
----
+O schema cria o bucket público `evza-media`. Confirme em **Storage** que o bucket existe e está marcado como público. As políticas permitem leitura pública e upload/alteração/eliminação apenas para utilizadores autenticados.
 
-## Guia de Implementação (Português)
+## 4. Criar administrador
 
-### Passo 1 — Criar uma conta no GitHub
+1. Abra **Authentication → Users**.
+2. Clique em **Add user**.
+3. Escreva o email e a palavra-passe do administrador.
+4. Confirme o utilizador se o Supabase pedir.
 
-1. Acesse a [página de registro do GitHub](https://github.com/signup)
-2. Preencha com o seu nome, e-mail e escolha uma palavra-passe
-3. Verifique o seu e-mail através do link enviado pelo GitHub
+## 5. Configurar credenciais
 
-### Passo 2 — Criar um novo repositório
-
-1. Faça login no GitHub: [github.com](https://github.com)
-2. Clique no botão **New** (ou **Novo repositório**) no canto superior direito
-3. Preencha:
-   - **Repository name:** `evza-gallery`
-   - **Visibility:** marque **Public**
-   - **Initialize this repository with a README:** (deixe desmarcado)
-4. Clique em **Create repository**
-
-### Passo 3 — Enviar os ficheiros
-
-#### Opção A — Via interface web (mais fácil)
-
-1. Na página do seu repositório, clique em **Uploading an existing file**
-2. Arraste todos os ficheiros do projeto para a área de upload:
-   ```
-   index.html
-   catalog.html
-   admin.html
-   data.js
-   app.js
-   style.css
-   manifest.json
-   sw.js
-   README.md
-   assets/logo-placeholder.svg
-   ```
-3. Clique em **Commit changes** — aguarde o upload
-
-#### Opção B — Via linha de comando
-
-```bash
-cd pasta-do-projeto
-git init
-git add .
-git commit -m "EVZA Gallery — primeira versão"
-git branch -M main
-git remote add origin https://github.com/SEU_USERNAME/evza-gallery.git
-git push -u origin main
-```
-
-### Passo 4 — Ativar o GitHub Pages
-
-1. No repositório, vá a **Settings** (Definições)
-2. No menu lateral esquerdo, clique em **Pages**
-3. Em **Source**, selecione **Deploy from a branch**
-4. Em **Branch**, selecione:
-   - Branch: **main**
-   - Folder: **/(root)**
-5. Clique em **Save**
-
-### Passo 5 — O site está online! 🎉
-
-O site ficará disponível em:
-
-```
-https://SEU_USERNAME.github.io/evza-gallery
-```
-
-> ⚠️ A propagação pode demorar alguns minutos (5–10 min).
-
----
-
-## Como adicionar fotos e vídeos
-
-### Via Painel de Administração
-
-1. Acesse: `https://SEU_USERNAME.github.io/evza-gallery/admin.html`
-2. A palavra-passe padrão é: `evza2025`
-3. Use o painel para adicionar catálogos e mídias
-4. Quando quiser tornar os dados permanentes, clique em **Exportar Dados**
-5. Substitua o ficheiro `data.js` no repositório pelo ficheiro exportado
-
-### Passo a passo para fotos no Google Drive
-
-1. Faça upload das fotos para uma pasta no Google Drive
-2. Para cada foto, clique com o botão direito → **Partilhar** → **Alterar para "Qualquer pessoa com o link"**
-3. Clique em **Copiar link**
-4. O link terá este formato:
-   ```
-   https://drive.google.com/file/d/1AbCdEfGhIjKlMnOpQrStUvWxYz/view?usp=sharing
-   ```
-5. O sistema extrai automaticamente o ID do ficheiro (`1AbCdEfGhIjKlMnOpQrStUvWxYz`)
-
-### Editar o ficheiro `data.js` manualmente
-
-Também pode editar diretamente o ficheiro `data.js` no repositório do GitHub:
+1. Abra **Settings → API** no Supabase.
+2. Copie **Project URL**.
+3. Copie a chave **anon public**.
+4. Edite `config.js`:
 
 ```javascript
-const GALLERY_DATA = [
-  {
-    id: "meu-catálogo",
-    name: "Nome do Catálogo",
-    cover: "FILE_ID_DA_CAPA",
-    description: "Descrição do catálogo",
-    items: [
-      { type: "photo", src: "FILE_ID_DA_FOTO", caption: "Legenda" },
-      { type: "video", src: "FILE_ID_DO_VIDEO", poster: "FILE_ID_DO_POSTER", caption: "Legenda" }
-    ]
-  }
-];
+supabaseUrl: 'https://o-seu-projecto.supabase.co',
+supabaseAnonKey: 'a-sua-chave-anon-public',
 ```
 
-> 💡 **Dica:** Para obter o FILE_ID, basta copiar a parte entre `/d/` e `/view` no link do Google Drive.
+## 6. Publicar no GitHub Pages
 
----
+1. Crie uma conta GitHub, se ainda não tiver.
+2. Crie um repositório chamado `evza-gallery`.
+3. Envie todos os ficheiros desta pasta para o repositório.
+4. Abra **Settings → Pages**.
+5. Em **Build and deployment**, escolha a branch principal e a pasta raiz.
+6. Guarde. O site ficará em `https://SEU_USUARIO.github.io/evza-gallery/`.
+7. Actualize `siteUrl` em `config.js` com esse endereço para partilhas correctas.
 
-## Alterar a palavra-passe do administrador
+## 7. Usar o painel
 
-1. Abra o ficheiro `app.js`
-2. Procure pela linha: `var ADMIN_PASSWORD = "evza2025";`
-3. Altere `"evza2025"` para a palavra-passe desejada
-4. Faça o commit e push para o repositório
+1. Aceda a `admin.html`.
+2. Entre com o email e a palavra-passe criados no Supabase.
+3. Crie o primeiro catálogo.
+4. Adicione fotos ou vídeos por upload directo, ou cole links antigos do Google Drive.
+5. Aprove ou rejeite comentários na área **Comentários**.
 
----
+## 8. Partilha
 
-## Estrutura de Ficheiros
+Cada catálogo usa `catalog.html?id=UUID`. Cada foto usa `photo.html?id=UUID`. Estes links podem ser enviados por WhatsApp, Facebook ou outras redes. Em telemóveis, o botão **Partilhar** usa a folha nativa do sistema; em computadores, copia o link.
 
-```
-evza-gallery/
-├── index.html          ← Página principal com grid de catálogos
-├── catalog.html        ← Página individual do catálogo com galeria
-├── admin.html          ← Painel de administração
-├── data.js             ← Dados da galeria (editável)
-├── app.js              ← JavaScript principal
-├── style.css           ← Folhas de estilo
-├── manifest.json       ← PWA — configurações da app
-├── sw.js               ← Service Worker (cache offline)
-├── README.md           ← Este ficheiro
-└── assets/
-    └── logo-placeholder.svg  ← Logo da escola
-```
+## 9. FAQ
 
----
+**Como evitar pausa do Supabase gratuito?**  
+Entre no painel Supabase periodicamente. Projectos sem uso podem ser pausados no plano gratuito.
 
-## Tecnologias
+**Como adicionar mais administradores?**  
+Crie novos utilizadores em **Authentication → Users**. Qualquer utilizador autenticado tem permissões de administração definidas pelas políticas RLS.
 
-- HTML5, CSS3, JavaScript (vanilla)
-- Google Fonts (Playfair Display + Lato)
-- GitHub Pages (alojamento gratuito)
-- Google Drive (armazenamento de fotos/vídeos)
-- Service Worker (PWA)
+**Como mudar a senha?**  
+No Supabase, abra o utilizador em **Authentication → Users** e defina uma nova palavra-passe.
 
----
+**Posso continuar a usar Google Drive?**  
+Sim. Ao adicionar media no painel, use o separador **Google Drive**. O site extrai o ID do ficheiro e gera uma URL directa.
 
-**Escola Primária e Secundária Vale do Zambeze**
-Tete — Moçambique
+## 10. Limites do plano gratuito
+
+| Recurso | Limite aproximado |
+| --- | --- |
+| Base de dados | Suficiente para milhares de registos escolares |
+| Storage | Limitado pelo plano gratuito activo do Supabase |
+| Autenticação | Adequada para poucos administradores |
+| GitHub Pages | Gratuito para sites estáticos |
+| Google Drive | Depende da conta usada para ficheiros antigos |
+
+## 11. Ficheiros principais
+
+- `schema.sql`: tabelas, índices, políticas e funções.
+- `config.js`: dados do projecto e comportamento do site.
+- `supabase.js`: cliente Supabase e resolução de URLs.
+- `auth.js`: login, logout e sessão.
+- `app.js`: galeria, lightbox, pesquisa, admin, likes, comentários e realtime.
+- `style.css`: identidade visual completa, responsivo e dark mode.
+- `sw.js`: PWA e cache offline.
+
+Depois do primeiro carregamento, o service worker guarda a aplicação para funcionamento offline básico. Dados novos do Supabase exigem internet.

@@ -1,18 +1,13 @@
 {
   "name": "EVZA Gallery",
   "short_name": "EVZA",
-  "description": "Escola Primária e Secundária Vale do Zambeze — Galeria de Fotos e Vídeos",
-  "start_url": "./index.html",
+  "description": "Galeria fotográfica da Escola Vale do Zambeze",
+  "start_url": "/evza-gallery/",
   "display": "standalone",
   "background_color": "#FAF6EF",
   "theme_color": "#8B3A1E",
-  "orientation": "any",
+  "lang": "pt-MZ",
   "icons": [
-    {
-      "src": "assets/logo.jpg",
-      "sizes": "512x512",
-      "type": "image/jpeg",
-      "purpose": "any maskable"
-    }
+    { "src": "assets/logo.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
   ]
 }
